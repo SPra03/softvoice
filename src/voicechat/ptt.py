@@ -15,6 +15,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 
 import numpy as np
 
@@ -204,24 +205,46 @@ class Session:
         if self.hands_free:
             print(f"hands-free: after each spoken reply the mic opens (beep). Pause {self.cfg.end_silence_ms / 1000:.1f}s "
                   f"to send; say \"{self.cfg.cancel_words[0]}\" to discard; silence for {self.cfg.listen_timeout_s:.0f}s closes the mic.", flush=True)
-        if self.paste:
-            print("(macOS asks once for Input Monitoring and Accessibility access for this terminal.)", flush=True)
+        from voicechat.permissions import check_and_request, input_monitoring
 
-        listener = keyboard.Listener(on_press=lambda k: self._on_press(k, key), on_release=lambda k: self._on_release(k, key))
-        listener.start()
+        check_and_request(need_paste=self.paste, need_hotkey=True, out=lambda m: print(m, flush=True))
+        print("Microphone: if nothing is ever heard, enable this terminal's app under Privacy & Security > Microphone.", flush=True)
+
+        self.listener = None
+        if input_monitoring() in ("granted", "unavailable"):
+            self._start_key_listener(key)
+        else:  # start the key watcher the moment the permission is toggled on; hands-free works meanwhile
+            threading.Thread(target=self._wait_for_input_monitoring, args=(key,), daemon=True).start()
         if self.hands_free:
             threading.Thread(target=self._event_loop, name="events", daemon=True).start()
         try:
-            while listener.is_alive():
+            while not self.closing:
                 time.sleep(0.2)
         except KeyboardInterrupt:
             print("\nbye", file=sys.stderr)
         finally:
             self.closing = True
             self.auto_cancel.set()
-            listener.stop()
+            if self.listener:
+                self.listener.stop()
             self.recorder.close()
         return 0
+
+    def _start_key_listener(self, key) -> None:
+        from pynput import keyboard
+
+        self.listener = keyboard.Listener(on_press=lambda k: self._on_press(k, key), on_release=lambda k: self._on_release(k, key))
+        self.listener.start()
+
+    def _wait_for_input_monitoring(self, key) -> None:
+        from voicechat.permissions import input_monitoring
+
+        while not self.closing:
+            time.sleep(2.0)
+            if input_monitoring() == "granted":
+                self._start_key_listener(key)
+                print(f"Input Monitoring granted: hold {self.hotkey} to talk.", flush=True)
+                return
 
     def _set_state(self, new: str, expect: str | None = None) -> bool:
         with self.state_lock:
@@ -267,9 +290,12 @@ class Session:
                 print(f"  (heard nothing, {held:.1f}s)", flush=True)
                 return
             print(f"  {text}   [{held:.1f}s speech, {dt:.2f}s transcribe]", flush=True)
-            if self.paste:
+            if self.paste and self._can_paste(text):
                 self.last_ptt_target = bundle
                 paste_text(text, self.auto_submit, self.cfg.paste_delay_ms)
+        except Exception as exc:
+            print(f"  push-to-talk error: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+            traceback.print_exc()
         finally:
             self._set_state("idle")
 
@@ -367,13 +393,26 @@ class Session:
                 print(f"  not pasted: {name or bundle} is in front. Copied to the clipboard instead; "
                       f"use the key once in your agent window to add it as a target.", flush=True)
                 return
+            if not self._can_paste(text):
+                return
             paste_text(text, submit=True, delay_ms=cfg.paste_delay_ms)
             print("  → sent", flush=True)
         except Exception as exc:
             print(f"  hands-free error: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+            traceback.print_exc()
         finally:
             self._set_state("idle")
             self.auto_done.set()
+
+    def _can_paste(self, text: str) -> bool:
+        from voicechat.permissions import accessibility
+
+        if accessibility() is False:
+            subprocess.run(["pbcopy"], input=text.encode())
+            print("  not pasted: Accessibility is not granted for this terminal's app. Copied to the clipboard; "
+                  "enable it under Privacy & Security > Accessibility.", flush=True)
+            return False
+        return True
 
     def _transcribe(self, audio: np.ndarray) -> tuple[str, float]:
         t0 = time.monotonic()
