@@ -6,6 +6,7 @@ Hands-free. The engine is the same `Session` the terminal uses.
 
 from __future__ import annotations
 
+import os
 import signal
 import subprocess
 import sys
@@ -72,6 +73,9 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
         def now_speaking(self, text, est_seconds: float = 0.0, index: int = 0, total: int = 0) -> None:
             AppHelper.callAfter(self.app.apply_speaking, text, est_seconds, index, total)
 
+        def level(self, level: float) -> None:  # from the audio thread, ~20 times a second
+            AppHelper.callAfter(self.app.apply_level, level)
+
     class App(rumps.App):
         def __init__(self):
             super().__init__("voicechat", title=ICONS["loading"], quit_button=None)
@@ -108,6 +112,10 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
         def apply_preview(self, text, tail="") -> None:
             if self.panel is not None:
                 self.panel.show_preview(text, tail)
+
+        def apply_level(self, level: float) -> None:
+            if self.panel is not None:
+                self.panel.set_level(level)
 
         def make_panel(self):
             try:
@@ -162,6 +170,20 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
     session = Session(cfg, hotkey, auto_submit, paste, hands_free, ui=ui)
     app.session = session
 
+    # We live in the menu bar and the pill: no Dock icon, no app menu, and never the active app.
+    # rumps activates us when its loop starts; that stole focus from the window you were typing in,
+    # so pastes were refused and the underline had no window to read. Give focus straight back.
+    from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
+
+    from voicechat.front import front_pid, give_focus_to
+
+    launched_from = front_pid()
+    NSApplication.sharedApplication().setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+
+    def hand_back():
+        if launched_from and launched_from != os.getpid():
+            give_focus_to(launched_from, timeout_s=0.5)
+
     def boot():
         try:
             session.start()
@@ -174,6 +196,7 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
     threading.Thread(target=boot, name="boot", daemon=True).start()
     if cfg.panel:
         AppHelper.callAfter(app.make_panel)  # runs once the Cocoa loop is up
+    AppHelper.callAfter(hand_back)
     if not cfg.menu_bar_icon:
         app.title = ""
     print("voicechat is running: floating panel (mic + speaker) and menu bar icon. Ctrl+C or Quit to stop.", flush=True)

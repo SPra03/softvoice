@@ -66,31 +66,41 @@ for Claude Code.
 voicechat app --hands-free
 ```
 
-A small dark pill floats above every window, bottom right by default. Drag it anywhere; it
-remembers the spot. Clicking it never steals focus, so your cursor stays in the prompt.
+A small dark glass pill (36 points tall) floats above every window, bottom right by default.
+Drag it anywhere; it remembers the spot. Clicking it never steals focus, so your cursor stays in
+the prompt. It uses one accent colour, and the accent always means "live": the waveform while
+the mic listens, the speaker while the voice talks. Everything else is grey. Whenever text shows, the capsule becomes a rounded rectangle so words never run into
+the curve, and the text is a single line that scrolls, newest words at the right.
 
 | button | click | shows |
 | --- | --- | --- |
-| mic | start a dictation session | grey idle, green your turn, red listening, waveform hearing you, hourglass transcribing, pencil waiting for your Enter |
-| speaker | stop the voice while it speaks; when quiet, read the text you have selected in the front app, or replay the last reply if nothing is selected | stop while speaking, play otherwise, slashed when muted |
+| mic | start a dictation session | coral at rest (talk is the next thing to do), a live coral waveform while it listens, grey while the voice speaks or it transcribes |
+| speaker | stop the voice while it speaks; when quiet, read the text you have selected in the front app, or replay the last reply if nothing is selected | coral stop while speaking, grey play otherwise, slashed when muted |
+
+Exactly one thing on the pill is coral at any time, and it is the thing to tap next.
 
 ### Following along while it speaks
 
-While a reply is read, the pill shows the sentence being spoken, words lighting up as the voice
-reaches them, with a sentence counter. The daemon speaks one sentence at a time and learns its
-own speaking rate, so the timing stays close.
+While a reply is read, the pill shows the sentence being spoken on one line: the word being
+said is white, the words already said grey, the rest dim. Long sentences slide left so the
+current word stays in view, with the clipped edge fading out. The daemon speaks one sentence at
+a time and learns its own speaking rate, so the timing stays close.
 
-On top of that, a soft yellow bar is drawn over that sentence in the front window itself, found
-through macOS accessibility. It works where the app exposes its text: the Claude desktop app
-(it switches its accessibility tree on when asked), Terminal, VS Code and most native apps.
-Text that has scrolled out of view gets no bar. Turn it off with the pill's menu or
+On top of that, a thin light grey underline is drawn under that sentence in the front window
+itself, line by line, found through macOS accessibility. It works where the app exposes
+its text: the Claude desktop app (it switches its accessibility tree on when asked), Terminal,
+VS Code and most native apps. The underline follows the page: every scroll event (seen by the
+same event tap that watches the talk key) makes it re-read its position at once, and a slow
+safety read twice a second covers keyboard scrolling and scrollbar drags. Text that has scrolled
+out of view gets no underline until it comes back. Turn it off with the pill's menu or
 `highlight_on_page = false`.
 
 ### Dictation session
 
-Click the mic (or tap the key) and the pill grows to the left into **live preview · ✕ · ✓**, with
-the speaker staying exactly where it was. Committed sentences are white; the sentence still
-forming, and the hint text, are grey. Talk as long as you like. Each time you pause for `dictation_pause_ms` (0.7 s) the sentence is committed to the
+Click the mic (or tap the key) and the pill grows to the left into **waveform · live text · ✕ · ✓**,
+with the speaker staying exactly where it was. Committed sentences are white; the sentence still
+forming, and the hint text, are grey; the line scrolls so the newest words are always visible.
+Talk as long as you like. Each time you pause for `dictation_pause_ms` (0.7 s) the sentence is committed to the
 preview; the sentence you are still saying is re-transcribed about once a second so you see it
 forming. Then:
 
@@ -98,6 +108,10 @@ forming. Then:
 - **✕** or saying "cancel" discards it
 - ending with "send it" pastes and presses Enter
 - `dictation_silence_s` (8 s) of silence finishes it by itself
+
+The paste goes to the app in front. If that is voicechat itself (opening the pill's menu
+activates it, and macOS does not always hand activation back), it goes to the last other app that
+was in front, after giving it focus again.
 
 The preview lives in the pill rather than in the prompt on purpose: live text keeps revising
 itself, and inside the pill we can rewrite it freely, while the prompt only gets one clean paste
@@ -171,7 +185,10 @@ clipboard and `listen` tells you.
 | `dictation_pause_ms` | `700` | pause that commits a sentence to the preview |
 | `dictation_silence_s` | `8` | silence that finishes a dictation session |
 | `panel` / `menu_bar_icon` | `true` | show the floating pill / the menu bar light |
-| `highlight_on_page` | `true` | draw a bar over the sentence being read in the front window |
+| `highlight_on_page` | `true` | underline the sentence being read in the front window |
+| `clear_selection` | `true` | after you select text and press play, ask the app to drop the selection (native apps and editors; the Claude app ignores the request) |
+| `accent` | `"#E8735A"` | the pill's live colour (waveform, speaker) |
+| `underline` | `"#AAAAAA"` | the colour of the underline on the page |
 | `hands_free` | `false` | make `voicechat listen` hands-free by default |
 | `end_silence_ms` | `900` | pause that ends your utterance |
 | `listen_timeout_s` | `10` | close the mic when you say nothing |

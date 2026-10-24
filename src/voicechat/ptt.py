@@ -16,6 +16,7 @@ terminal/agent apps, or the app you last used push-to-talk in, and press Enter.
 from __future__ import annotations
 
 import fnmatch
+import os
 import queue
 import subprocess
 import sys
@@ -25,7 +26,7 @@ import traceback
 
 import numpy as np
 
-from voicechat.config import Config
+from voicechat.config import Config, accent_rgb
 
 RECORD_RATE = 16000
 
@@ -131,15 +132,26 @@ def _interrupt_speech(reason: str = "ptt") -> None:
 
 # -- microphone ---------------------------------------------------------------------
 
+def level_of(block: np.ndarray) -> float:
+    """Loudness of an audio block as 0..1: silence near 0, normal speech around 0.4-0.8."""
+    if block.size == 0:
+        return 0.0
+    rms = float(np.sqrt(np.mean(block.astype(np.float32) ** 2)))
+    db = 20.0 * np.log10(rms + 1e-6)
+    return float(min(1.0, max(0.0, (db + 50.0) / 40.0)))
+
+
 class Recorder:
     """Keeps the microphone open; buffers audio only while recording.
     `read_new` hands out fresh audio for live VAD, `stop` returns the whole take."""
 
-    def __init__(self, rate: int = RECORD_RATE):
+    def __init__(self, rate: int = RECORD_RATE, on_level=None):
         import sounddevice as sd
 
         self.lock = threading.Lock()
         self.recording = False
+        self.on_level = on_level  # called ~20 times a second with a 0..1 loudness while recording
+        self._level_at = 0.0
         self.chunks: list[np.ndarray] = []
         self.live: queue.Queue[np.ndarray] = queue.Queue()
         try:
@@ -156,6 +168,13 @@ class Recorder:
             with self.lock:
                 self.chunks.append(block)
             self.live.put(block)
+            now = time.monotonic()
+            if self.on_level is not None and now - self._level_at >= 0.05:
+                self._level_at = now
+                try:
+                    self.on_level(level_of(block))
+                except Exception:
+                    pass
 
     def start(self) -> None:
         with self.lock:
@@ -219,6 +238,9 @@ class TerminalUI:
     def now_speaking(self, text: str | None, est_seconds: float = 0.0, index: int = 0, total: int = 0) -> None:
         pass  # the terminal does not follow along
 
+    def level(self, level: float) -> None:
+        pass  # no waveform in the terminal
+
 
 # -- the session --------------------------------------------------------------------
 
@@ -245,6 +267,7 @@ class Session:
         self.speaking = False
         self.muted = False
         self.last_ptt_target: str | None = None
+        self.front = None  # FrontTracker: the last front app that is not us
         self.ptt_t0 = 0.0
         self.key: tuple[int, int | None] | None = None
         self.hotkey_tap = None
@@ -272,7 +295,7 @@ class Session:
         self.ui.log("starting the speaker daemon ...")
         if not ensure_daemon():
             raise RuntimeError("the speaker daemon did not start; see `voicechat log`")
-        self.recorder = Recorder()
+        self.recorder = Recorder(on_level=self._on_level)
         self.ui.log(f"ready. Tap {self.hotkey} to talk, or hold it to talk while held. Ctrl+C to quit.")
         if self.hands_free:
             self.ui.log(f"hands-free: after each spoken reply the mic opens (beep). Pause {self.cfg.end_silence_ms / 1000:.1f}s "
@@ -283,11 +306,19 @@ class Session:
             self._start_key_listener()
         else:  # start the key watcher the moment the permission is toggled on
             threading.Thread(target=self._wait_for_input_monitoring, daemon=True).start()
+        try:
+            from voicechat.front import FrontTracker
+
+            self.front = FrontTracker()
+            self.ui.run_on_main(self.front.install)
+        except Exception as exc:
+            self.ui.log(f"front-app tracking unavailable: {exc}")
         if getattr(self.ui, "supports_overlay", False):
             try:
                 from voicechat.highlight import Highlighter
 
-                self.highlighter = Highlighter(self.ui.run_on_main)
+                self.highlighter = Highlighter(self.ui.run_on_main, accent_rgb(self.cfg.underline),
+                                               other_pid=lambda: self.front.pid if self.front else None)
             except Exception as exc:
                 self.ui.log(f"on-page highlight unavailable: {exc}")
         threading.Thread(target=self._event_loop, name="events", daemon=True).start()
@@ -303,6 +334,11 @@ class Session:
             print("\nbye", file=sys.stderr)
         finally:
             self.stop()
+
+    def _on_level(self, level: float) -> None:
+        fn = getattr(self.ui, "level", None)
+        if fn is not None:
+            fn(level)
 
     def stop(self) -> None:
         self.closing = True
@@ -387,8 +423,22 @@ class Session:
                 self.ui.log(f"speaking the selected text ({len(text)} chars)")
             except Exception as exc:
                 self.ui.log(f"could not reach the speaker daemon: {exc}")
+            if self.cfg.clear_selection:
+                threading.Thread(target=self._clear_selection, daemon=True).start()
             return
         self.replay_last()
+
+    def _clear_selection(self) -> None:
+        """Drop the selection we just read, so the underline is what you see instead of the blue."""
+        from voicechat.front import front_pid
+        from voicechat.selection import clear_selection
+
+        try:
+            result = clear_selection(front_pid())
+        except Exception as exc:
+            result = f"failed: {type(exc).__name__}: {exc}"
+        if result != "collapsed":
+            self.ui.log(f"  (selection not cleared: {result})")
 
     def set_voice(self, name: str) -> None:
         from voicechat.client import send
@@ -427,13 +477,17 @@ class Session:
         from voicechat.hotkey import Hotkey
 
         keycode, flag = self.key
-        self.hotkey_tap = Hotkey(keycode, flag, self._on_press, self._on_release)
+        self.hotkey_tap = Hotkey(keycode, flag, self._on_press, self._on_release, on_scroll=self._on_scroll)
 
         def install():
             if not self.hotkey_tap.install():
                 self.ui.log("could not watch the key: Input Monitoring is not granted for this terminal's app")
 
         self.ui.run_on_main(install)  # the tap lives on the main run loop
+
+    def _on_scroll(self) -> None:  # main thread, on every scroll event: just a flag for the underline
+        if self.highlighter is not None:
+            self.highlighter.nudge()
 
     def _wait_for_input_monitoring(self) -> None:
         from voicechat.permissions import input_monitoring
@@ -482,7 +536,6 @@ class Session:
         try:
             audio = self.recorder.stop()
             held = time.monotonic() - self.ptt_t0
-            bundle, name = frontmost_app()
             self._ui("transcribing", "Transcribing…")
             text, dt = self._transcribe(audio)
             if not text:
@@ -490,11 +543,10 @@ class Session:
                 return
             self.ui.log(f"  {text}   [{held:.1f}s speech, {dt:.2f}s transcribe]")
             text, say_send = strip_send_word(text, self.cfg.send_words)
-            if self.paste and text and self._can_paste(text):
-                self.last_ptt_target = bundle
+            if self.paste and text:
                 submit = self.auto_submit or say_send
-                paste_text(text, submit, self.cfg.paste_delay_ms)
-                self.ui.log("  → sent" if submit else "  → pasted; press Enter to send")
+                if self._deliver(text, submit, anywhere=True):  # you held the key in that window: it is the target
+                    self.ui.log("  → sent" if submit else "  → pasted; press Enter to send")
         except Exception as exc:
             self.ui.log(f"  push-to-talk error: {type(exc).__name__}: {exc}")
             traceback.print_exc()
@@ -604,24 +656,15 @@ class Session:
                 return
             text, say_send = strip_send_word(text, cfg.send_words)
             if not text:  # just "send it": press Enter on whatever is already in the prompt
-                if self.paste and self._can_paste("send"):
-                    paste_text("", submit=True, delay_ms=0)
+                if self.paste and self._deliver("", submit=True):
                     self.ui.log("  → sent what was in the prompt")
                 return
             if not self.paste:
                 return
-            bundle, name = frontmost_app()
-            if not target_allowed(bundle, cfg.paste_targets, self.last_ptt_target):
-                subprocess.run(["pbcopy"], input=text.encode())
-                self.ui.log(f"  not pasted: {name or bundle} is in front. Copied to the clipboard instead; "
-                            f"hold the key once in your agent window to add it as a target.")
-                end_state = "your_turn"
-                return
-            if not self._can_paste(text):
-                end_state = "your_turn"
-                return
             submit = self.auto_submit or say_send
-            paste_text(text, submit=submit, delay_ms=cfg.paste_delay_ms)
+            if not self._deliver(text, submit):
+                end_state = "your_turn"
+                return
             if submit:
                 self.ui.log("  → sent")
             else:
@@ -794,16 +837,9 @@ class Session:
             self.ui.log(f"  dictation done: {len(final)} chars" + (" → sending" if submit else " → pasted; press Enter to send"))
             if not self.paste:
                 return
-            bundle, name = frontmost_app()
-            if not target_allowed(bundle, cfg.paste_targets, self.last_ptt_target):
-                subprocess.run(["pbcopy"], input=final.encode())
-                self.ui.log(f"  not pasted: {name or bundle} is in front. Copied to the clipboard instead.")
+            if not self._deliver(final, submit):
                 end_state = "your_turn"
                 return
-            if not self._can_paste(final):
-                end_state = "your_turn"
-                return
-            paste_text(final, submit=submit, delay_ms=cfg.paste_delay_ms)
             end_state = "idle" if submit else "review"
         except Exception as exc:
             self.ui.log(f"  dictation error: {type(exc).__name__}: {exc}")
@@ -811,6 +847,40 @@ class Session:
         finally:
             self._set_state("idle")
             self._ui(end_state, "Sent. Waiting for the reply…" if end_state == "idle" else "")
+
+    def _paste_target(self) -> tuple[str | None, str | None, int | None, bool]:
+        """(bundle, name, pid, ours): where a paste would land. When our own app is in front, the
+        target is the last other front app, and `ours` says focus must be handed back first."""
+        from voicechat.front import front_pid
+
+        pid = front_pid()
+        if pid is not None and pid == os.getpid() and self.front is not None and self.front.pid:
+            return self.front.bundle, self.front.name, self.front.pid, True
+        bundle, name = frontmost_app()
+        return bundle, name, pid, False
+
+    def _deliver(self, text: str, submit: bool, anywhere: bool = False) -> bool:
+        """Paste `text` (and press Enter when `submit`) into the target app. `anywhere` skips the
+        allowed-targets check and remembers the target, for push-to-talk. False means the text
+        went to the clipboard instead, and the log says why."""
+        from voicechat.front import give_focus_to
+
+        bundle, name, pid, ours = self._paste_target()
+        if not anywhere and not target_allowed(bundle, self.cfg.paste_targets, self.last_ptt_target):
+            subprocess.run(["pbcopy"], input=text.encode())
+            self.ui.log(f"  not pasted: {name or bundle} is in front. Copied to the clipboard instead; "
+                        f"hold the key once in your agent window to add it as a target.")
+            return False
+        if not self._can_paste(text or "send"):
+            return False
+        if ours and not give_focus_to(pid):
+            subprocess.run(["pbcopy"], input=text.encode())
+            self.ui.log(f"  not pasted: could not hand focus back to {name or bundle}. Copied to the clipboard instead.")
+            return False
+        if anywhere:
+            self.last_ptt_target = bundle
+        paste_text(text, submit, self.cfg.paste_delay_ms if text else 0)
+        return True
 
     def _can_paste(self, text: str) -> bool:
         from voicechat.permissions import accessibility

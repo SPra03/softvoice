@@ -41,7 +41,10 @@ class Config:
     # The app's controls
     panel: bool = True  # floating two-button pill (talk, play/stop); drag it anywhere
     menu_bar_icon: bool = True  # status light in the menu bar
-    highlight_on_page: bool = True  # while speaking, try to highlight the sentence in the front window (best effort)
+    highlight_on_page: bool = True  # while speaking, underline the sentence in the front window (best effort)
+    clear_selection: bool = True  # after reading selected text, drop the selection so the underline shows
+    accent: str = "#E8735A"  # the pill's one colour: the waveform while listening, the speaker while talking (hex)
+    underline: str = "#AAAAAA"  # the underline under the sentence being read, on the page (hex)
     # Dictation session (mic click or key tap): stays open, previews live, pastes on confirm
     dictation_pause_ms: int = 700  # pause that closes one sentence and commits it to the preview
     dictation_silence_s: float = 8.0  # say nothing this long and the session finishes by itself
@@ -81,6 +84,17 @@ class Config:
             value = getattr(self, f.name)
             lines.append(f"{f.name} = {_toml_value(value)}")
         return "\n".join(lines) + "\n"
+
+
+def accent_rgb(value: str, fallback=(0.91, 0.45, 0.35)) -> tuple[float, float, float]:
+    """'#E8735A' -> (r, g, b) in 0..1; anything unparsable gives the default coral."""
+    v = value.strip().lstrip("#")
+    if len(v) == 3:
+        v = "".join(c * 2 for c in v)
+    try:
+        return tuple(int(v[i:i + 2], 16) / 255 for i in (0, 2, 4))  # type: ignore[return-value]
+    except Exception:
+        return fallback
 
 
 def _toml_value(value) -> str:

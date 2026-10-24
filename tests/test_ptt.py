@@ -45,3 +45,29 @@ def test_resolve_key_names():
     import pytest
     with pytest.raises(SystemExit):
         resolve_key("banana")
+
+
+def test_front_tracker_ignores_our_own_process():
+    import os
+
+    from voicechat.front import FrontTracker
+
+    class App:
+        def __init__(self, pid, bundle, name):
+            self._pid, self._bundle, self._name = pid, bundle, name
+
+        def processIdentifier(self):
+            return self._pid
+
+        def bundleIdentifier(self):
+            return self._bundle
+
+        def localizedName(self):
+            return self._name
+
+    t = FrontTracker()
+    t.note(App(4242, "com.anthropic.claudefordesktop", "Claude"))
+    t.note(App(os.getpid(), "org.python.python", "Python"))  # the pill's menu made us front
+    assert (t.pid, t.bundle, t.name) == (4242, "com.anthropic.claudefordesktop", "Claude")
+    t.note(None)
+    assert t.pid == 4242

@@ -45,18 +45,20 @@ def resolve_key(name: str) -> tuple[int, int | None]:
 class Hotkey:
     """Calls on_press / on_release for one key. `install` must run on the main thread."""
 
-    def __init__(self, keycode: int, flag: int | None, on_press: Callable[[], None], on_release: Callable[[], None]):
+    def __init__(self, keycode: int, flag: int | None, on_press: Callable[[], None], on_release: Callable[[], None],
+                 on_scroll: Callable[[], None] | None = None):
         self.keycode = keycode
         self.flag = flag
         self.on_press = on_press
         self.on_release = on_release
+        self.on_scroll = on_scroll  # any scroll wheel or trackpad scroll, anywhere; the underline follows the page
         self.down = False
         self.tap = None
         self.source = None
 
     def install(self) -> bool:
         mask = (Quartz.CGEventMaskBit(Quartz.kCGEventFlagsChanged) | Quartz.CGEventMaskBit(Quartz.kCGEventKeyDown)
-                | Quartz.CGEventMaskBit(Quartz.kCGEventKeyUp))
+                | Quartz.CGEventMaskBit(Quartz.kCGEventKeyUp) | Quartz.CGEventMaskBit(Quartz.kCGEventScrollWheel))
         self.tap = Quartz.CGEventTapCreate(Quartz.kCGSessionEventTap, Quartz.kCGHeadInsertEventTap,
                                            Quartz.kCGEventTapOptionListenOnly, mask, self._callback, None)
         if self.tap is None:
@@ -77,6 +79,10 @@ class Hotkey:
         try:
             if etype in (Quartz.kCGEventTapDisabledByTimeout, Quartz.kCGEventTapDisabledByUserInput):
                 Quartz.CGEventTapEnable(self.tap, True)
+                return event
+            if etype == Quartz.kCGEventScrollWheel:
+                if self.on_scroll is not None:
+                    self.on_scroll()
                 return event
             keycode = Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventKeycode)
             if keycode != self.keycode:

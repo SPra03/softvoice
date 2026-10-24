@@ -22,7 +22,11 @@ MAX_NODES = 8000
 WALK_BUDGET_S = 3.0
 WINDOW_WAIT_S = 4.0
 RECOLLECT_EVERY_S = 1.5
+IDLE_POLL_S = 0.5  # safety re-read of the underline's position when no scroll event arrives
+SCROLL_GAP_S = 1 / 60  # while scrolling, re-read at most this often
 MAX_BARS = 6
+UNDERLINE_H = 2.0  # the underline's thickness, in points
+UNDERLINE_GAP = 1.0  # how far below the line box it sits
 
 
 def _ax():
@@ -270,14 +274,18 @@ def rects_for_sentence(sentence: str, snap: Snapshot) -> list[tuple]:
 
 
 class Highlighter:
-    def __init__(self, run_on_main):
+    def __init__(self, run_on_main, color: tuple[float, float, float] = (0.67, 0.67, 0.67), other_pid=None):
+        self.color = color  # the underline's colour, (r, g, b) in 0..1
+        self.other_pid = other_pid  # callable -> pid of the last front app that is not us (the session tracks it)
         self.run_on_main = run_on_main
         self.overlays: list = []
         self.lock = threading.Lock()
         self.pid: int | None = None
         self.last_other_pid: int | None = None  # the last front app that wasn't us
         self.snap: Snapshot | None = None
-        self.generation = 0
+        self.generation = 0  # bumped per reply
+        self.show_seq = 0  # bumped per sentence shown, and on hide: stops the older follow loops
+        self.moved = threading.Event()  # set by nudge(): the page scrolled, re-read now
 
     # -- background --
 
@@ -287,6 +295,8 @@ class Highlighter:
         pid = _front_pid()
         if pid and pid != os.getpid():
             self.last_other_pid = pid
+        elif self.other_pid is not None:  # we are in front: the session knows who was before us
+            self.last_other_pid = self.other_pid() or self.last_other_pid
         self.pid = self.last_other_pid  # never read our own pill; it carries the same sentence
         with self.lock:
             self.snap = None
@@ -305,30 +315,50 @@ class Highlighter:
         return snap
 
     def show_for(self, sentence: str) -> None:
-        threading.Thread(target=self._show_for, args=(sentence, self.generation), daemon=True).start()
+        self.show_seq += 1
+        threading.Thread(target=self._show_for, args=(sentence, self.generation, self.show_seq), daemon=True).start()
 
-    def _show_for(self, sentence: str, gen: int) -> None:
+    def nudge(self) -> None:
+        """The page may have moved (a scroll event): re-read the underline's position at once."""
+        self.moved.set()
+
+    def _current(self, gen: int, seq: int) -> bool:
+        return gen == self.generation and seq == self.show_seq
+
+    def _show_for(self, sentence: str, gen: int, seq: int) -> None:
         deadline = time.monotonic() + WINDOW_WAIT_S + WALK_BUDGET_S
         while time.monotonic() < deadline:  # wait for the first read of the window
             with self.lock:
-                snap = self.snap if gen == self.generation else None
-            if snap is not None or gen != self.generation:
+                snap = self.snap if self._current(gen, seq) else None
+            if snap is not None or not self._current(gen, seq):
                 break
             time.sleep(0.05)
-        if gen != self.generation or snap is None:
+        if not self._current(gen, seq) or snap is None:
             return
         rects = self._rects(sentence, snap)
         if not rects and time.monotonic() - snap.taken_at > RECOLLECT_EVERY_S:
             snap = self._collect(gen)  # the page may have re-rendered or scrolled: read it again
-            if gen != self.generation or snap is None:
+            if not self._current(gen, seq) or snap is None:
                 return
             rects = self._rects(sentence, snap)
-        if gen != self.generation:
-            return
-        if rects:
-            self.run_on_main(lambda: self._show(rects))
-        else:
-            self.hide()
+        shown = None
+        last_read = time.monotonic()
+        while self._current(gen, seq):  # follow the text while this sentence is being spoken
+            if rects != shown:
+                shown = rects
+                if rects:
+                    self.run_on_main(lambda r=rects: self._show(r))
+                else:
+                    self.run_on_main(self._hide)  # scrolled out of view: back when it scrolls in
+            self.moved.wait(IDLE_POLL_S)  # a scroll wakes us at once; otherwise a slow safety read
+            self.moved.clear()
+            gap = SCROLL_GAP_S - (time.monotonic() - last_read)
+            if gap > 0:
+                time.sleep(gap)
+            if not self._current(gen, seq):
+                return
+            rects = self._rects(sentence, snap)  # same nodes, fresh positions
+            last_read = time.monotonic()
 
     @staticmethod
     def _rects(sentence: str, snap: Snapshot) -> list[tuple]:
@@ -338,6 +368,7 @@ class Highlighter:
             return []
 
     def hide(self) -> None:
+        self.show_seq += 1  # ends the follow loop of the sentence on screen
         self.run_on_main(self._hide)
 
     # -- main thread --
@@ -370,8 +401,9 @@ class Highlighter:
                                  | NSWindowCollectionBehaviorStationary)
         content = w.contentView()
         content.setWantsLayer_(True)
-        content.layer().setBackgroundColor_(NSColor.systemYellowColor().colorWithAlphaComponent_(0.28).CGColor())
-        content.layer().setCornerRadius_(4.0)
+        r, g, b = self.color
+        content.layer().setBackgroundColor_(NSColor.colorWithSRGBRed_green_blue_alpha_(r, g, b, 0.9).CGColor())
+        content.layer().setCornerRadius_(UNDERLINE_H / 2)
         return w
 
     def _show(self, rects: list[tuple]) -> None:
@@ -379,11 +411,10 @@ class Highlighter:
 
         while len(self.overlays) < len(rects):
             self.overlays.append(self._make_overlay())
-        pad = 2.0
         for i, panel in enumerate(self.overlays):
             if i < len(rects):
-                x, y, w, h = rects[i]
-                panel.setFrame_display_(NSMakeRect(x - pad, y - pad, w + 2 * pad, h + 2 * pad), True)
+                x, y, w, h = rects[i]  # a thin line along the bottom edge of each line box
+                panel.setFrame_display_(NSMakeRect(x, y - UNDERLINE_GAP, w, UNDERLINE_H), True)
                 panel.orderFrontRegardless()
             else:
                 panel.orderOut_(None)
