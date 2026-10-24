@@ -8,6 +8,7 @@ Right-click, or press and hold, for the options menu. Drag it anywhere; the spot
 from __future__ import annotations
 
 import json
+import time
 
 import objc
 from AppKit import (
@@ -16,10 +17,13 @@ from AppKit import (
     NSCompositingOperationSourceAtop,
     NSCompositingOperationSourceOver,
     NSFont,
+    NSFontAttributeName,
+    NSForegroundColorAttributeName,
     NSImage,
     NSLineBreakByWordWrapping,
     NSMenu,
     NSMenuItem,
+    NSMutableAttributedString,
     NSPanel,
     NSRectFillUsingOperation,
     NSScreen,
@@ -41,12 +45,15 @@ BTN = 48
 PAD = 6
 PREVIEW_W = 300
 W, H = BTN * 2 + PAD * 3, BTN + PAD * 2
-W_EXPANDED = BTN * 2 + PREVIEW_W + PAD * 4
+W_EXPANDED = PREVIEW_W + BTN * 3 + PAD * 5  # dictation: preview · ✕ · ✓ · speaker
+W_SPEAKING = BTN * 2 + PREVIEW_W + PAD * 4  # speaking: mic · sentence · speaker
 LONG_PRESS_S = 0.45
 PREVIEW_CHARS = 220
 
 GREY = NSColor.colorWithWhite_alpha_(0.72, 1.0)
+DIM = NSColor.colorWithWhite_alpha_(0.55, 1.0)
 WHITE = NSColor.whiteColor()
+FONT = NSFont.systemFontOfSize_(13)
 RED = NSColor.systemRedColor()
 ORANGE = NSColor.systemOrangeColor()
 YELLOW = NSColor.systemYellowColor()
@@ -174,6 +181,12 @@ class MenuActions(NSObject):
     def quit_(self, sender):
         self.panel.on_quit()
 
+    def toggleHighlight_(self, sender):
+        self.panel.session.set_highlight(not self.panel.session.highlight_enabled)
+
+    def tick_(self, timer):
+        self.panel._refresh_speaking()
+
 
 class Panel:
     def __init__(self, session, on_quit):
@@ -181,7 +194,14 @@ class Panel:
         self.on_quit = on_quit
         self.state = "loading"
         self.expanded = False
+        self.mode = "collapsed"  # collapsed | dictation | speaking
         self._text = ""
+        self._tail = ""
+        self._speak_text = ""
+        self._speak_t0 = 0.0
+        self._speak_est = 1.0
+        self._speak_pos = (0, 0)
+        self._speak_timer = None
         self.actions = MenuActions.alloc().initWithPanel_(self)
 
         x, y = self._load_position()
@@ -240,60 +260,133 @@ class Panel:
         self.mic.set_look(mic_sym, mic_tint)
         self.speaker.set_look(spk_sym, spk_tint)
         self.mic.setToolTip_(detail or state)
-        self.speaker.setToolTip_("Stop speaking" if state == "speaking" else "Replay the last reply")
-        if self.expanded:
+        self.speaker.setToolTip_("Stop speaking" if state == "speaking" else "Read the selected text, or replay the last reply")
+        if self.mode == "dictation":
             self._refresh_preview()
 
-    def show_preview(self, text) -> None:
-        """Live dictation text; None collapses the pill back to two buttons."""
+    def show_preview(self, text, tail: str = "") -> None:
+        """Live dictation text (committed sentences, plus the one still forming); None collapses the pill."""
         if text is None:
-            if self.expanded:
+            if self.mode == "dictation":
                 self._collapse()
             return
         self._text = text
-        if not self.expanded:
-            self._expand()
+        self._tail = tail or ""
+        if self.mode != "dictation":
+            self._expand("dictation")
         self._refresh_preview()
 
+    def show_speaking(self, text, est_seconds: float = 0.0, index: int = 0, total: int = 0) -> None:
+        """The sentence being read, with words lighting up on the daemon's time estimate; None collapses."""
+        if text is None:
+            if self.mode == "speaking":
+                self._collapse()
+            return
+        if self.mode == "dictation":
+            return  # you're dictating; don't take the pill away
+        self._speak_text = text
+        self._speak_t0 = time.monotonic()
+        self._speak_est = max(float(est_seconds), 0.6)
+        self._speak_pos = (index, total)
+        if self.mode != "speaking":
+            self._expand("speaking")
+        if self._speak_timer is None:
+            self._speak_timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+                0.1, self.actions, b"tick:", None, True)
+        self._refresh_speaking()
+
+    def _refresh_speaking(self) -> None:
+        if self.mode != "speaking":
+            return
+        words = self._speak_text.split()
+        frac = min(1.0, (time.monotonic() - self._speak_t0) / self._speak_est)
+        done = int(round(frac * len(words)))
+        attr = NSMutableAttributedString.alloc().init()
+
+        def append(piece: str, color) -> None:
+            attr.appendAttributedString_(NSMutableAttributedString.alloc().initWithString_attributes_(
+                piece, {NSFontAttributeName: FONT, NSForegroundColorAttributeName: color}))
+
+        if done:
+            append(" ".join(words[:done]), WHITE)
+        if done < len(words):
+            append((" " if done else "") + " ".join(words[done:]), DIM)
+        i, n = self._speak_pos
+        if n > 1:
+            append(f"  {i + 1}/{n}", DIM)
+        self.preview.setAttributedStringValue_(attr)
+        size = self.preview.cell().cellSizeForBounds_(NSMakeRect(0, 0, PREVIEW_W, 1000))
+        self._layout("speaking", text_h=min(max(float(size.height), 20.0), 60.0))
+
     def _refresh_preview(self) -> None:
-        shown = self._text
-        if len(shown) > PREVIEW_CHARS:
-            shown = "…" + shown[-PREVIEW_CHARS:]
-        dot = "● " if self.state == "dict_hearing" else "○ "
-        self.preview.setStringValue_(dot + (shown or "Listening… speak, pause, and sentences appear here"))
+        committed, tail = self._text, self._tail
+        total = len(committed) + len(tail)
+        if total > PREVIEW_CHARS:  # keep the newest words visible
+            cut = total - PREVIEW_CHARS
+            if cut >= len(committed):
+                committed, tail = "", "…" + tail[cut - len(committed):]
+            else:
+                committed = "…" + committed[cut:]
+        attr = NSMutableAttributedString.alloc().init()
+
+        def append(piece: str, color) -> None:
+            attr.appendAttributedString_(NSMutableAttributedString.alloc().initWithString_attributes_(
+                piece, {NSFontAttributeName: FONT, NSForegroundColorAttributeName: color}))
+
+        append("● " if self.state == "dict_hearing" else "○ ", DIM)
+        if not committed and not tail:
+            append("Listening… speak, pause, and sentences appear here", DIM)
+        else:
+            if committed:
+                append(committed, WHITE)
+            if tail:
+                append((" " if committed else "") + tail, DIM)
+        self.preview.setAttributedStringValue_(attr)
         size = self.preview.cell().cellSizeForBounds_(NSMakeRect(0, 0, PREVIEW_W, 1000))
         text_h = min(max(float(size.height), 20.0), 60.0)
-        self._layout(expanded=True, text_h=text_h)
+        self._layout("dictation", text_h=text_h)
 
-    def _expand(self) -> None:
+    def _expand(self, mode: str) -> None:
         self.expanded = True
-        for v in (self.mic, self.speaker):
-            v.setHidden_(True)
-        for v in (self.cancel_btn, self.ok_btn, self.preview):
-            v.setHidden_(False)
+        self.mode = mode
+        dictation = mode == "dictation"
+        self.mic.setHidden_(dictation)  # dictation: the mic's side becomes ✕ ✓; the speaker stays put
+        self.cancel_btn.setHidden_(not dictation)
+        self.ok_btn.setHidden_(not dictation)
+        self.preview.setHidden_(False)
 
     def _collapse(self) -> None:
         self.expanded = False
+        self.mode = "collapsed"
         self._text = ""
+        self._tail = ""
+        if self._speak_timer is not None:
+            self._speak_timer.invalidate()
+            self._speak_timer = None
         for v in (self.cancel_btn, self.ok_btn, self.preview):
             v.setHidden_(True)
-        for v in (self.mic, self.speaker):
-            v.setHidden_(False)
-        self._layout(expanded=False)
+        self.mic.setHidden_(False)
+        self._layout("collapsed")
 
-    def _layout(self, expanded: bool, text_h: float = 20.0) -> None:
-        new_w = W_EXPANDED if expanded else W
-        new_h = max(H, text_h + PAD * 2) if expanded else H
+    def _layout(self, mode: str, text_h: float = 20.0) -> None:
+        """The right edge never moves, so the speaker button stays put while the pill grows leftwards."""
+        new_w = {"dictation": W_EXPANDED, "speaking": W_SPEAKING}.get(mode, W)
+        new_h = max(H, text_h + PAD * 2) if mode != "collapsed" else H
         f = self.window.frame()
-        screen_mid = NSScreen.mainScreen().frame().size.width / 2
-        anchored_right = (f.origin.x + f.size.width / 2) > screen_mid
-        x = f.origin.x + f.size.width - new_w if anchored_right else f.origin.x
+        visible = NSScreen.mainScreen().visibleFrame()
+        x = max(visible.origin.x, f.origin.x + f.size.width - new_w)
         self.window.setFrame_display_(NSMakeRect(x, f.origin.y, new_w, new_h), True)
         self.window.contentView().layer().setCornerRadius_(min(new_h, H) / 2)
-        if expanded:
-            self.cancel_btn.setFrame_(NSMakeRect(PAD, (new_h - BTN) / 2, BTN, BTN))
+        btn_y = (new_h - BTN) / 2
+        if mode == "dictation":
+            self.preview.setFrame_(NSMakeRect(PAD, (new_h - text_h) / 2, PREVIEW_W, text_h))
+            self.cancel_btn.setFrame_(NSMakeRect(PAD * 2 + PREVIEW_W, btn_y, BTN, BTN))
+            self.ok_btn.setFrame_(NSMakeRect(PAD * 3 + PREVIEW_W + BTN, btn_y, BTN, BTN))
+            self.speaker.setFrame_(NSMakeRect(PAD * 4 + PREVIEW_W + BTN * 2, btn_y, BTN, BTN))
+        elif mode == "speaking":
+            self.mic.setFrame_(NSMakeRect(PAD, btn_y, BTN, BTN))
             self.preview.setFrame_(NSMakeRect(PAD * 2 + BTN, (new_h - text_h) / 2, PREVIEW_W, text_h))
-            self.ok_btn.setFrame_(NSMakeRect(PAD * 3 + BTN + PREVIEW_W, (new_h - BTN) / 2, BTN, BTN))
+            self.speaker.setFrame_(NSMakeRect(PAD * 3 + BTN + PREVIEW_W, btn_y, BTN, BTN))
         else:
             self.mic.setFrame_(NSMakeRect(PAD, PAD, BTN, BTN))
             self.speaker.setFrame_(NSMakeRect(PAD * 2 + BTN, PAD, BTN, BTN))
@@ -307,7 +400,7 @@ class Panel:
         if self.state == "speaking":
             self.session.stop_speaking()
         else:
-            self.session.replay_last()
+            self.session.speak_selection_or_replay()
 
     def _show_menu(self, view):
         from voicechat.tts import PREDEFINED_VOICES
@@ -327,6 +420,7 @@ class Panel:
         add("Hands-free: mic opens after each reply", b"toggleHandsFree:", s.hands_free)
         add("Auto-send: press Enter for me", b"toggleAutoSend:", s.auto_submit)
         add("Mute the voice", b"toggleMute:", s.muted)
+        add("Highlight the sentence on the page", b"toggleHighlight:", s.highlight_enabled)
         menu.addItem_(NSMenuItem.separatorItem())
         voices = NSMenu.alloc().init()
         for name in PREDEFINED_VOICES:
@@ -340,7 +434,14 @@ class Panel:
         add("Open config file", b"openConfig:")
         menu.addItem_(NSMenuItem.separatorItem())
         add("Quit voicechat", b"quit:")
+        # Showing a menu activates us; give focus back to whatever app had it afterwards.
+        from AppKit import NSApplicationActivateIgnoringOtherApps, NSWorkspace
+        import os
+
+        previous = NSWorkspace.sharedWorkspace().frontmostApplication()
         menu.popUpMenuPositioningItem_atLocation_inView_(None, NSMakePoint(0, 0), view)
+        if previous is not None and int(previous.processIdentifier()) != os.getpid():
+            previous.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
 
     # -- position --
 
@@ -355,11 +456,7 @@ class Panel:
     def save_position(self) -> None:
         try:
             f = self.window.frame()
-            x = f.origin.x
-            if self.expanded:  # store where the collapsed pill would sit
-                screen_mid = NSScreen.mainScreen().frame().size.width / 2
-                if (f.origin.x + f.size.width / 2) > screen_mid:
-                    x = f.origin.x + f.size.width - W
+            x = f.origin.x + f.size.width - W  # where the collapsed pill sits: the right edge is fixed
             HOME_DIR.mkdir(parents=True, exist_ok=True)
             POS_PATH.write_text(json.dumps({"x": x, "y": f.origin.y}))
         except Exception:

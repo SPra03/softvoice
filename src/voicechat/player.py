@@ -1,35 +1,39 @@
-"""Play float32 mono audio chunks through the default output device as they arrive."""
+"""Play float32 mono audio through the default output device as it arrives."""
 
 from __future__ import annotations
 
-import threading
-from typing import Iterable
-
 import numpy as np
+
+
+class Playback:
+    """One open output stream. `write` blocks until the device has taken the audio, which is
+    the backpressure that keeps generation just ahead of playback."""
+
+    def __init__(self, sample_rate: int):
+        import sounddevice as sd
+
+        self.sample_rate = sample_rate
+        self.stream = sd.OutputStream(samplerate=sample_rate, channels=1, dtype="float32", latency="high")
+        self.stream.start()
+        self.played = 0
+
+    def write(self, chunk: np.ndarray) -> None:
+        data = np.ascontiguousarray(chunk, dtype=np.float32).reshape(-1, 1)
+        self.stream.write(data)
+        self.played += len(data)
+
+    def finish(self) -> None:  # let buffered audio play out
+        self.stream.stop()
+        self.stream.close()
+
+    def abort(self) -> None:  # drop buffered audio now
+        self.stream.abort()
+        self.stream.close()
 
 
 class Player:
     def __init__(self, sample_rate: int):
         self.sample_rate = sample_rate
 
-    def play(self, chunks: Iterable[np.ndarray], stop: threading.Event) -> int:
-        """Play chunks until exhausted or `stop` is set. Returns samples played."""
-        import sounddevice as sd
-
-        played = 0
-        stream = sd.OutputStream(samplerate=self.sample_rate, channels=1, dtype="float32", latency="high")
-        stream.start()
-        try:
-            for chunk in chunks:
-                if stop.is_set():
-                    break
-                data = np.ascontiguousarray(chunk, dtype=np.float32).reshape(-1, 1)
-                stream.write(data)  # blocks until the device has taken it: natural backpressure
-                played += len(data)
-            if stop.is_set():
-                stream.abort()
-            else:
-                stream.stop()  # waits for buffered audio to finish
-        finally:
-            stream.close()
-        return played
+    def open(self) -> Playback:
+        return Playback(self.sample_rate)

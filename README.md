@@ -29,10 +29,13 @@ First use downloads the Pocket TTS weights (~440 MB) and, for listening, Parakee
 Nothing else to run. When an agent finishes a turn, its Stop hook calls `voicechat hook`, which
 hands the reply to a small daemon (started on demand, kept warm) that cleans and speaks it:
 
+- the whole turn is spoken, not just the last paragraph: every text block of at least
+  `interim_min_chars` (200) since your message, so a long answer written before a tool call is not
+  lost, while short progress notes between tool calls are skipped
 - code blocks, tables, URLs and long paths are dropped or shortened: look at the screen for those
 - markdown is flattened; bullets become sentences so the voice pauses
 - anything that looks like a key or token is replaced with "redacted"
-- long replies are cut at a sentence boundary after `max_chars` (default 700) with "More on screen."
+- long replies are cut at a sentence boundary after `max_chars` (default 1400) with "More on screen."
 - permission prompts are spoken too; sending a new prompt interrupts speech
 
 ```bash
@@ -69,12 +72,25 @@ remembers the spot. Clicking it never steals focus, so your cursor stays in the 
 | button | click | shows |
 | --- | --- | --- |
 | mic | start a dictation session | grey idle, green your turn, red listening, waveform hearing you, hourglass transcribing, pencil waiting for your Enter |
-| speaker | stop the voice while it speaks, replay the last reply when quiet | stop while speaking, play otherwise, slashed when muted |
+| speaker | stop the voice while it speaks; when quiet, read the text you have selected in the front app, or replay the last reply if nothing is selected | stop while speaking, play otherwise, slashed when muted |
+
+### Following along while it speaks
+
+While a reply is read, the pill shows the sentence being spoken, words lighting up as the voice
+reaches them, with a sentence counter. The daemon speaks one sentence at a time and learns its
+own speaking rate, so the timing stays close.
+
+On top of that, a soft yellow bar is drawn over that sentence in the front window itself, found
+through macOS accessibility. It works where the app exposes its text: the Claude desktop app
+(it switches its accessibility tree on when asked), Terminal, VS Code and most native apps.
+Text that has scrolled out of view gets no bar. Turn it off with the pill's menu or
+`highlight_on_page = false`.
 
 ### Dictation session
 
-Click the mic (or tap the key) and the pill widens into **✕ · live preview · ✓**. Talk as long as
-you like. Each time you pause for `dictation_pause_ms` (0.7 s) the sentence is committed to the
+Click the mic (or tap the key) and the pill grows to the left into **live preview · ✕ · ✓**, with
+the speaker staying exactly where it was. Committed sentences are white; the sentence still
+forming, and the hint text, are grey. Talk as long as you like. Each time you pause for `dictation_pause_ms` (0.7 s) the sentence is committed to the
 preview; the sentence you are still saying is re-transcribed about once a second so you see it
 forming. Then:
 
@@ -141,11 +157,13 @@ clipboard and `listen` tells you.
 | --- | --- | --- |
 | `voice` | `alba` | a predefined voice, or a path to a short WAV to clone |
 | `language` | `english` | Pocket TTS model: `english`, `french`, `german`, `spanish`, `italian`, `portuguese`, `dutch`, or the tiny `english_18m_2026-10` |
-| `max_chars` | `700` | where to cut long replies |
+| `max_chars` | `1400` | where to cut long replies |
+| `speak_whole_turn` | `true` | speak every substantial text block of the turn, not only the last |
+| `interim_min_chars` | `200` | shorter blocks before tool calls count as progress notes and are skipped |
 | `speak_notifications` | `["permission_prompt"]` | add `"idle_prompt"` to be nagged |
 | `interrupt_on_prompt` | `true` | stop speaking when you send a prompt |
 | `announce_project` | `false` | prefix replies with the project folder name |
-| `hotkey` | `alt_r` | push-to-talk key (pynput name: `alt_r`, `cmd_r`, `ctrl_r`, `f5`, ...) |
+| `hotkey` | `alt_r` | the key: `alt_r`, `alt_l`, `cmd_r`, `ctrl_r`, `shift_r`, `fn`, `f1`…`f20` |
 | `stt_model` | `mlx-community/parakeet-tdt-0.6b-v3` | any Parakeet model in the mlx-community collection |
 | `auto_submit` | `false` | press Enter after pasting; off means the transcript waits in your prompt for review |
 | `send_words` | `["send it", ...]` | say one at the end of a take to send it hands-free |
@@ -153,6 +171,7 @@ clipboard and `listen` tells you.
 | `dictation_pause_ms` | `700` | pause that commits a sentence to the preview |
 | `dictation_silence_s` | `8` | silence that finishes a dictation session |
 | `panel` / `menu_bar_icon` | `true` | show the floating pill / the menu bar light |
+| `highlight_on_page` | `true` | draw a bar over the sentence being read in the front window |
 | `hands_free` | `false` | make `voicechat listen` hands-free by default |
 | `end_silence_ms` | `900` | pause that ends your utterance |
 | `listen_timeout_s` | `10` | close the mic when you say nothing |

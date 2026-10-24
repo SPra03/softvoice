@@ -32,17 +32,6 @@ RECORD_RATE = 16000
 
 # -- small helpers ------------------------------------------------------------------
 
-def resolve_key(name: str):
-    from pynput import keyboard
-
-    name = name.strip().lower()
-    if hasattr(keyboard.Key, name):
-        return getattr(keyboard.Key, name)
-    if len(name) == 1:
-        return keyboard.KeyCode.from_char(name)
-    raise SystemExit(f"unknown hotkey {name!r}; use a pynput key name such as alt_r, cmd_r, ctrl_r, f5")
-
-
 def is_tap(held_seconds: float, threshold_ms: int) -> bool:
     return held_seconds * 1000 < threshold_ms
 
@@ -100,24 +89,35 @@ def earcon(kind: str) -> None:
 
 
 def paste_text(text: str, submit: bool, delay_ms: int) -> None:
-    from pynput import keyboard
+    from voicechat.hotkey import KEY_RETURN, KEY_V, press
 
-    kb = keyboard.Controller()
     old = None
     if text:
         old = subprocess.run(["pbpaste"], capture_output=True).stdout
         subprocess.run(["pbcopy"], input=text.encode())
         time.sleep(delay_ms / 1000)
-        with kb.pressed(keyboard.Key.cmd):
-            kb.press("v")
-            kb.release("v")
+        press(KEY_V, cmd=True)
     if submit:
         time.sleep(0.15)
-        kb.press(keyboard.Key.enter)
-        kb.release(keyboard.Key.enter)
+        press(KEY_RETURN)
     if old is not None:
         time.sleep(0.3)
         subprocess.run(["pbcopy"], input=old)  # give the clipboard back
+
+
+def copy_selection() -> str:
+    """Copy whatever is selected in the frontmost app and return it; "" when nothing is selected."""
+    from voicechat.hotkey import KEY_C, press
+
+    sentinel = "\u2063voicechat-no-selection\u2063"
+    old = subprocess.run(["pbpaste"], capture_output=True).stdout
+    subprocess.run(["pbcopy"], input=sentinel.encode())
+    press(KEY_C, cmd=True)
+    time.sleep(0.2)
+    new = subprocess.run(["pbpaste"], capture_output=True).stdout
+    subprocess.run(["pbcopy"], input=old)  # give the clipboard back
+    text = new.decode("utf-8", errors="replace")
+    return "" if text == sentinel else text
 
 
 def _interrupt_speech(reason: str = "ptt") -> None:
@@ -210,8 +210,14 @@ class TerminalUI:
         if line:
             print(line, flush=True)
 
-    def preview(self, text: str | None) -> None:
+    def preview(self, text: str | None, tail: str = "") -> None:
         pass  # committed sentences are logged as they land
+
+    def run_on_main(self, fn) -> None:
+        fn()  # `voicechat listen` drives everything from the main thread already
+
+    def now_speaking(self, text: str | None, est_seconds: float = 0.0, index: int = 0, total: int = 0) -> None:
+        pass  # the terminal does not follow along
 
 
 # -- the session --------------------------------------------------------------------
@@ -240,17 +246,20 @@ class Session:
         self.muted = False
         self.last_ptt_target: str | None = None
         self.ptt_t0 = 0.0
-        self.key = None
+        self.key: tuple[int, int | None] | None = None
+        self.hotkey_tap = None
+        self.highlighter = None
+        self.highlight_enabled = cfg.highlight_on_page
         self.transcriber = None
         self.recorder: Recorder | None = None
         self.detector = None
-        self.listener = None
 
     # -- lifecycle --
 
     def start(self) -> None:
         """Load models, open the mic, start the key watcher and the daemon event feed. Blocks a few seconds."""
         from voicechat.client import ensure_daemon
+        from voicechat.hotkey import resolve_key
         from voicechat.permissions import check_and_request, input_monitoring
         from voicechat.stt import Transcriber
         from voicechat.vad import UtteranceDetector
@@ -274,13 +283,22 @@ class Session:
             self._start_key_listener()
         else:  # start the key watcher the moment the permission is toggled on
             threading.Thread(target=self._wait_for_input_monitoring, daemon=True).start()
+        if getattr(self.ui, "supports_overlay", False):
+            try:
+                from voicechat.highlight import Highlighter
+
+                self.highlighter = Highlighter(self.ui.run_on_main)
+            except Exception as exc:
+                self.ui.log(f"on-page highlight unavailable: {exc}")
         threading.Thread(target=self._event_loop, name="events", daemon=True).start()
         self._ui("idle")
 
     def wait(self) -> None:
+        from voicechat.hotkey import run_main_loop_once
+
         try:
             while not self.closing:
-                time.sleep(0.2)
+                run_main_loop_once(0.25)  # the key tap is serviced by the main run loop
         except KeyboardInterrupt:
             print("\nbye", file=sys.stderr)
         finally:
@@ -289,8 +307,8 @@ class Session:
     def stop(self) -> None:
         self.closing = True
         self.auto_cancel.set()
-        if self.listener:
-            self.listener.stop()
+        if self.hotkey_tap is not None:
+            self.ui.run_on_main(self.hotkey_tap.remove)
         if self.recorder:
             self.recorder.close()
 
@@ -358,6 +376,20 @@ class Session:
         except Exception as exc:
             self.ui.log(f"could not reach the speaker daemon: {exc}")
 
+    def speak_selection_or_replay(self) -> None:
+        """The play button: read the text selected in the front app, or replay the last reply."""
+        from voicechat.client import send
+
+        text = copy_selection() if self.paste else ""
+        if text.strip():
+            try:
+                send({"cmd": "speak", "text": text, "meta": {"event": "selection", "session_id": "selection"}})
+                self.ui.log(f"speaking the selected text ({len(text)} chars)")
+            except Exception as exc:
+                self.ui.log(f"could not reach the speaker daemon: {exc}")
+            return
+        self.replay_last()
+
     def set_voice(self, name: str) -> None:
         from voicechat.client import send
 
@@ -366,6 +398,12 @@ class Session:
             self.ui.log(f"voice: {name}" if resp.get("ok") else f"voice change failed: {resp.get('error')}")
         except Exception as exc:
             self.ui.log(f"could not reach the speaker daemon: {exc}")
+
+    def set_highlight(self, on: bool) -> None:
+        self.highlight_enabled = on
+        if not on and self.highlighter:
+            self.highlighter.hide()
+        self.ui.log(f"on-page highlight {'on' if on else 'off'}")
 
     def set_auto_submit(self, on: bool) -> None:
         self.auto_submit = on
@@ -386,10 +424,16 @@ class Session:
             return True
 
     def _start_key_listener(self) -> None:
-        from pynput import keyboard
+        from voicechat.hotkey import Hotkey
 
-        self.listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
-        self.listener.start()
+        keycode, flag = self.key
+        self.hotkey_tap = Hotkey(keycode, flag, self._on_press, self._on_release)
+
+        def install():
+            if not self.hotkey_tap.install():
+                self.ui.log("could not watch the key: Input Monitoring is not granted for this terminal's app")
+
+        self.ui.run_on_main(install)  # the tap lives on the main run loop
 
     def _wait_for_input_monitoring(self) -> None:
         from voicechat.permissions import input_monitoring
@@ -403,9 +447,7 @@ class Session:
 
     # -- the key --
 
-    def _on_press(self, k) -> None:
-        if k != self.key:
-            return
+    def _on_press(self) -> None:
         with self.state_lock:
             st = self.state
         if st == "ptt":
@@ -423,9 +465,7 @@ class Session:
         self.recorder.start()
         self._ui("ptt", "Recording… release to send, or let go now to keep talking")
 
-    def _on_release(self, k) -> None:
-        if k != self.key:
-            return
+    def _on_release(self) -> None:
         with self.state_lock:
             if self.state != "ptt":
                 return
@@ -499,8 +539,20 @@ class Session:
                 self.auto_cancel.set()
             elif self.state == "idle":
                 self._ui("speaking", f"Speaking{f' ({project})' if project else ''}… tap {self.hotkey} to interrupt")
+            if self.highlighter and self.highlight_enabled:
+                self.highlighter.begin()
+        elif kind == "sentence":
+            if self.state == "dictation":
+                return
+            text = str(ev.get("text") or "")
+            self.ui.now_speaking(text, float(ev.get("est_seconds") or 0.0), int(ev.get("index") or 0), int(ev.get("total") or 1))
+            if self.highlighter and self.highlight_enabled:
+                self.highlighter.show_for(text)
         elif kind == "speech_end":
             self.speaking = False
+            self.ui.now_speaking(None)
+            if self.highlighter:
+                self.highlighter.hide()
             if ev.get("interrupted"):
                 self.resume_after = False  # you typed, or you're already talking
                 if self.state == "idle":
@@ -710,7 +762,7 @@ class Session:
                         and len(audio) - open_start >= int(0.8 * RATE)):
                     last_preview = now
                     tail = self._transcribe16(audio[max(0, open_start - pad):])
-                    self.ui.preview(" ".join(committed + ([tail] if tail else [])))
+                    self.ui.preview(" ".join(committed), tail)
                 if open_start is None and now - last_activity > cfg.dictation_silence_s:
                     outcome = "finish" if committed else "cancel"
                     break

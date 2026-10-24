@@ -35,3 +35,13 @@ def test_strip_send_word():
     assert strip_send_word("Send it!", words) == ("", True)
     assert strip_send_word("Please resend the email.", words) == ("Please resend the email.", False)
     assert strip_send_word("Send the email to Bob.", words) == ("Send the email to Bob.", False)
+
+
+def test_resolve_key_names():
+    from voicechat.hotkey import resolve_key
+
+    assert resolve_key("alt_r")[0] == 61
+    assert resolve_key("F5") == (96, None)
+    import pytest
+    with pytest.raises(SystemExit):
+        resolve_key("banana")

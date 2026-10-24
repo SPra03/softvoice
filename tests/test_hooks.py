@@ -42,3 +42,39 @@ def test_transcript_fallback(tmp_path):
     assert last_assistant_text_from_transcript(t) == "Last."
     a = interpret({"hook_event_name": "Stop", "transcript_path": str(t)}, NOTIFY, True)
     assert a.kind == "speak" and a.text == "Last."
+
+
+def test_whole_turn_speaks_substance_before_tool_calls(tmp_path):
+    long_block = "Here is the design proposal. " * 12  # ~350 chars of substance before a tool call
+    rows = [
+        {"type": "user", "message": {"content": "earlier question"}},
+        {"type": "assistant", "message": {"content": [{"type": "text", "text": "Old answer that must not be spoken."}]}},
+        {"type": "user", "message": {"content": [{"type": "text", "text": "what should we build?"}]}},
+        {"type": "assistant", "message": {"content": [{"type": "text", "text": "Starting the build."}]}},  # short progress note
+        {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {}}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "content": "ok"}]}},
+        {"type": "assistant", "message": {"content": [{"type": "text", "text": long_block}]}},
+        {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "wrap_up", "input": {}}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "content": "ok"}]}},
+    ]
+    t = tmp_path / "t.jsonl"
+    t.write_text("\n".join(json.dumps(r) for r in rows))
+    a = interpret({"hook_event_name": "Stop", "transcript_path": str(t), "last_assistant_message": "In short: build it."}, NOTIFY, True)
+    assert a.kind == "speak"
+    assert a.text.startswith(long_block.strip())
+    assert a.text.endswith("In short: build it.")
+    assert "Starting the build." not in a.text
+    assert "Old answer" not in a.text
+    # whole-turn off: only the final block
+    b = interpret({"hook_event_name": "Stop", "transcript_path": str(t), "last_assistant_message": "In short: build it."}, NOTIFY, True, whole_turn=False)
+    assert b.text == "In short: build it."
+
+
+def test_split_sentences_merges_short_ones():
+    from voicechat.daemon import split_sentences
+
+    text = "Yes. That is possible, and I would do it in two layers. Here is why! Short? Done."
+    out = split_sentences(text)
+    assert out[0].startswith("Yes. That is possible")
+    assert out[-1] == "Here is why! Short? Done."  # short sentences ride along
+    assert " ".join(out) == text

@@ -52,6 +52,8 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
     from voicechat.panel import Panel
 
     class MenuBarUI:
+        supports_overlay = True
+
         def __init__(self, app):
             self.app = app
 
@@ -61,8 +63,14 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
         def state(self, state: str, detail: str = "") -> None:  # called from worker threads
             AppHelper.callAfter(self.app.apply_state, state, detail)
 
-        def preview(self, text: str | None) -> None:
-            AppHelper.callAfter(self.app.apply_preview, text)
+        def preview(self, text: str | None, tail: str = "") -> None:
+            AppHelper.callAfter(self.app.apply_preview, text, tail)
+
+        def run_on_main(self, fn) -> None:
+            AppHelper.callAfter(fn)
+
+        def now_speaking(self, text, est_seconds: float = 0.0, index: int = 0, total: int = 0) -> None:
+            AppHelper.callAfter(self.app.apply_speaking, text, est_seconds, index, total)
 
     class App(rumps.App):
         def __init__(self):
@@ -93,9 +101,13 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
             if self.panel is not None:
                 self.panel.apply_state(state, detail)
 
-        def apply_preview(self, text) -> None:
+        def apply_speaking(self, text, est_seconds=0.0, index=0, total=0) -> None:
             if self.panel is not None:
-                self.panel.show_preview(text)
+                self.panel.show_speaking(text, est_seconds, index, total)
+
+        def apply_preview(self, text, tail="") -> None:
+            if self.panel is not None:
+                self.panel.show_preview(text, tail)
 
         def make_panel(self):
             try:

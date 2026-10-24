@@ -24,7 +24,9 @@ class Config:
     # Speaking
     voice: str = "alba"  # a Pocket TTS predefined voice, or a path/URL to a WAV to clone
     language: str = "english"  # Pocket TTS model id, see `voicechat voices`
-    max_chars: int = 700  # cut cleaned replies here, at a sentence boundary
+    max_chars: int = 1400  # cut cleaned replies here, at a sentence boundary
+    speak_whole_turn: bool = True  # speak every substantial text block of the turn, not only the last one
+    interim_min_chars: int = 200  # shorter blocks before tool calls are progress notes: skipped
     truncation_suffix: str = "More on screen."
     speak_notifications: list[str] = field(default_factory=lambda: ["permission_prompt"])
     interrupt_on_prompt: bool = True  # stop speaking when you send a new prompt
@@ -39,6 +41,7 @@ class Config:
     # The app's controls
     panel: bool = True  # floating two-button pill (talk, play/stop); drag it anywhere
     menu_bar_icon: bool = True  # status light in the menu bar
+    highlight_on_page: bool = True  # while speaking, try to highlight the sentence in the front window (best effort)
     # Dictation session (mic click or key tap): stays open, previews live, pastes on confirm
     dictation_pause_ms: int = 700  # pause that closes one sentence and commits it to the preview
     dictation_silence_s: float = 8.0  # say nothing this long and the session finishes by itself

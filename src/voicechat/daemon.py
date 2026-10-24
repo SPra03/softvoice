@@ -9,6 +9,7 @@ from __future__ import annotations
 import collections
 import fcntl
 import json
+import re
 import logging
 import logging.handlers
 import os
@@ -25,6 +26,20 @@ from voicechat.clean import clean
 from voicechat.config import LOG_PATH, PID_PATH, SOCKET_PATH, Config, ensure_home
 
 log = logging.getLogger("voicechat.daemon")
+
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+
+
+def split_sentences(text: str, min_chars: int = 24) -> list[str]:
+    """Sentences to speak one at a time; very short ones ride along with the next."""
+    parts = [p.strip() for p in _SENTENCE_END.split(text) if p.strip()]
+    out: list[str] = []
+    for part in parts:
+        if out and len(out[-1]) < min_chars:
+            out[-1] = f"{out[-1]} {part}"
+        else:
+            out.append(part)
+    return out or [text.strip()]
 
 
 @dataclass
@@ -52,6 +67,7 @@ class Engine:
         self.sub_lock = threading.Lock()
         self.stop_reason: str | None = None
         self.last_spoken: Utterance | None = None
+        self.rate_cps = 14.5  # characters per second of audio; learned as we go, used to predict sentence lengths
         self.worker = threading.Thread(target=self._run, name="speaker", daemon=True)
         self.worker.start()
 
@@ -216,22 +232,46 @@ class Engine:
         played = 0
 
         def timed():
-            for chunk in self.speaker.stream(utt.text, self.current_stop):
+            for chunk in self.speaker.stream(split_sentences(utt.text)[0], self.current_stop):
                 if first[0] is None:
                     first[0] = time.monotonic() - t0
                 yield chunk
 
+        sentences = split_sentences(utt.text)
+        sr = self.speaker.sample_rate
         try:
-            played = self.player.play(timed(), self.current_stop)
-            log.info("spoke %d chars, first audio %.2fs, %.1fs audio%s", len(utt.text),
-                     first[0] or -1, played / self.speaker.sample_rate,
-                     f" (interrupted: {self.stop_reason})" if self.current_stop.is_set() else "")
+            playback = self.player.open()
+            try:
+                for i, sentence in enumerate(sentences):
+                    if self.current_stop.is_set():
+                        break
+                    self.broadcast(self._event("sentence", utt.meta, index=i, total=len(sentences), text=sentence,
+                                               est_seconds=round(len(sentence) / self.rate_cps, 2)))
+                    samples = 0
+                    for chunk in timed() if i == 0 else self.speaker.stream(sentence, self.current_stop):
+                        if self.current_stop.is_set():
+                            break
+                        playback.write(chunk)
+                        samples += len(chunk)
+                    audio_s = samples / sr
+                    if audio_s > 0.5 and not self.current_stop.is_set():  # learn the real speaking rate
+                        self.rate_cps = 0.7 * self.rate_cps + 0.3 * (len(sentence) / audio_s)
+                if self.current_stop.is_set():
+                    playback.abort()
+                else:
+                    playback.finish()
+            except Exception:
+                playback.abort()
+                raise
+            played = playback.played
+            log.info("spoke %d chars in %d sentences, first audio %.2fs, %.1fs audio%s", len(utt.text), len(sentences),
+                     first[0] or -1, played / sr, f" (interrupted: {self.stop_reason})" if self.current_stop.is_set() else "")
         except Exception:
             log.exception("playback failed")
         finally:
             self.speaking = None
             self.broadcast(self._event("speech_end", utt.meta, spoken=True, interrupted=self.current_stop.is_set(),
-                                       reason=self.stop_reason, seconds=round(played / self.speaker.sample_rate, 2)))
+                                       reason=self.stop_reason, seconds=round(played / sr, 2)))
 
 
 class Handler(socketserver.StreamRequestHandler):

@@ -197,7 +197,8 @@ def _hook_payload(raw: str) -> int:
         from voicechat.client import send
         from voicechat.hooks import interpret
 
-        action = interpret(payload, cfg.speak_notifications, cfg.interrupt_on_prompt)
+        action = interpret(payload, cfg.speak_notifications, cfg.interrupt_on_prompt,
+                           whole_turn=cfg.speak_whole_turn, interim_min_chars=cfg.interim_min_chars)
         if action.kind == "speak":
             send({"cmd": "speak", "text": action.text, "meta": action.meta})
         elif action.kind == "stop":
