@@ -1,7 +1,8 @@
 """The macOS menu bar face of the listener: `voicechat app`.
 
-A mic in the menu bar shows whose turn it is. Click it for Talk, Stop speaking, Mute and
-Hands-free. The engine is the same `Session` the terminal uses.
+One quiet waveform in the menu bar, the same in every state (the pill is where state shows).
+Click it for Talk, Stop speaking, Mute and Hands-free. The engine is the same `Session` the
+terminal uses.
 """
 
 from __future__ import annotations
@@ -15,20 +16,8 @@ import traceback
 
 from voicechat.config import Config, write_default_config
 
-ICONS = {
-    "loading": "⏳",
-    "idle": "🎙",
-    "your_turn": "🎙 your turn",
-    "speaking": "🔊",
-    "open": "🔴",
-    "hearing": "🔴 …",
-    "ptt": "🔴",
-    "transcribing": "⏳",
-    "review": "✏️",
-    "dictating": "🔴",
-    "dict_hearing": "🔴 …",
-    "muted": "🔇",
-}
+MENU_BAR_SYMBOL = "waveform"  # an SF Symbol, drawn as a template image so it matches the menu bar
+MENU_BAR_POINTS = 15.0
 DETAILS = {
     "loading": "Loading models…",
     "idle": "Idle. Tap the key or click Talk.",
@@ -43,6 +32,19 @@ DETAILS = {
     "dict_hearing": "Hearing you…",
     "muted": "Muted",
 }
+
+
+def menu_bar_image():
+    """The status item's image: one monochrome symbol that follows the menu bar's appearance."""
+    from AppKit import NSFontWeightMedium, NSImage, NSImageSymbolConfiguration
+
+    image = NSImage.imageWithSystemSymbolName_accessibilityDescription_(MENU_BAR_SYMBOL, "voicechat")
+    if image is None:
+        return None
+    conf = NSImageSymbolConfiguration.configurationWithPointSize_weight_(MENU_BAR_POINTS, NSFontWeightMedium)
+    image = image.imageWithSymbolConfiguration_(conf)
+    image.setTemplate_(True)
+    return image
 
 
 def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free: bool) -> int:
@@ -78,7 +80,10 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
 
     class App(rumps.App):
         def __init__(self):
-            super().__init__("voicechat", title=ICONS["loading"], quit_button=None)
+            super().__init__("voicechat", title=None, quit_button=None)
+            # rumps only takes icons from files; hand it the symbol image directly. It reads this
+            # attribute when it creates the status item.
+            self._icon_nsimage = menu_bar_image()
             self.session: Session | None = None
             self.panel = None
             self.status = rumps.MenuItem(DETAILS["loading"])  # no callback: a disabled status line
@@ -99,8 +104,6 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
             self.tick.start()
 
         def apply_state(self, state: str, detail: str) -> None:
-            if cfg.menu_bar_icon:
-                self.title = ICONS.get(state, ICONS["idle"])
             self.status.title = detail or DETAILS.get(state, state)
             if self.panel is not None:
                 self.panel.apply_state(state, detail)
@@ -184,6 +187,12 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
         if launched_from and launched_from != os.getpid():
             give_focus_to(launched_from, timeout_s=0.5)
 
+    def hide_menu_bar_item():  # `menu_bar_icon = false`: the pill alone
+        try:
+            app._nsapp.nsstatusitem.setVisible_(False)
+        except Exception as exc:
+            print(f"could not hide the menu bar item: {exc}", file=sys.stderr, flush=True)
+
     def boot():
         try:
             session.start()
@@ -198,7 +207,7 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
         AppHelper.callAfter(app.make_panel)  # runs once the Cocoa loop is up
     AppHelper.callAfter(hand_back)
     if not cfg.menu_bar_icon:
-        app.title = ""
+        AppHelper.callAfter(hide_menu_bar_item)
     print("voicechat is running: floating panel (mic + speaker) and menu bar icon. Ctrl+C or Quit to stop.", flush=True)
     app.run()
     return 0

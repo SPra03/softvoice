@@ -140,19 +140,9 @@ that you can edit before sending.
 **Press and hold** either button, or right-click, for the options: Hands-free, Auto-send,
 Mute, Voice, config file, Quit. `panel = false` in the config turns the pill off.
 
-The menu bar also gets a small status light (`menu_bar_icon = false` to hide it):
-
-| icon | meaning |
-| --- | --- |
-| 🎙 | idle |
-| 🎙 your turn | the agent finished; tap the key or click Talk |
-| 🔊 | speaking (tap the key to interrupt) |
-| 🔴 | mic open; 🔴 … means it hears you |
-| ⏳ | transcribing |
-| ✏️ | pasted into your prompt, waiting for your Enter |
-| 🔇 | muted |
-
-The menu has **Talk** (open the mic now; during a take it ends the take early),
+The menu bar gets one small waveform, the same in every state (the pill is where state shows);
+`menu_bar_icon = false` hides it. Its first line says what voicechat is doing right now, and the
+menu has **Talk** (open the mic now; during a take it ends the take early),
 **Stop speaking**, **Mute**, **Hands-free** and **Auto-send** checkboxes, the config file, and Quit.
 
 The key: **tap** it (under `tap_threshold_ms`, 350 ms) to start a dictation session, tap again to
