@@ -42,6 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("notify", help="Codex legacy notify entry: JSON as an argument")
     p.add_argument("payload")
 
+    sub.add_parser("setup", help="download the models and ask macOS for the permissions, so the first run is instant")
     p = sub.add_parser("install", help="write hooks into Claude Code and Codex settings")
     p.add_argument("--claude-only", action="store_true")
     p.add_argument("--codex-only", action="store_true")
@@ -223,6 +224,42 @@ def cmd_notify(args) -> int:
     return _hook_payload(args.payload)
 
 
+def cmd_setup(args) -> int:
+    """Everything that would otherwise happen, slowly, the first time you use it."""
+    from huggingface_hub import hf_hub_download
+
+    from voicechat import permissions
+
+    cfg = Config.load()
+    print(f"config: {write_default_config()}")
+
+    t0 = time.monotonic()
+    print(f"Pocket TTS ({cfg.language}, voice {cfg.voice}): about 230 MB the first time", flush=True)
+    from voicechat.tts import Speaker
+
+    Speaker(cfg)
+    print(f"  ready in {time.monotonic() - t0:.0f}s")
+
+    t0 = time.monotonic()
+    print(f"Parakeet ({cfg.stt_model}): 2.5 GB the first time", flush=True)
+    for name in ("config.json", "model.safetensors"):  # the same two files parakeet-mlx loads
+        hf_hub_download(cfg.stt_model, name)
+    print(f"  ready in {time.monotonic() - t0:.0f}s")
+
+    print("Permissions (granted to the app this terminal belongs to):")
+    try:
+        import sounddevice as sd
+
+        with sd.InputStream(channels=1, samplerate=16000):  # makes macOS ask for the microphone now
+            time.sleep(0.3)
+        print("Microphone: opened")
+    except Exception as exc:
+        print(f"Microphone: could not open ({exc})")
+    permissions.check_and_request(need_paste=True, need_hotkey=True)
+    print("Next: `voicechat install` adds the hooks, then `voicechat app --hands-free` starts the pill.")
+    return 0
+
+
 def cmd_install(args) -> int:
     from voicechat import install as inst
 
@@ -306,6 +343,7 @@ COMMANDS = {
     "log": cmd_log,
     "hook": cmd_hook,
     "notify": cmd_notify,
+    "setup": cmd_setup,
     "install": cmd_install,
     "uninstall": cmd_uninstall,
     "config": cmd_config,

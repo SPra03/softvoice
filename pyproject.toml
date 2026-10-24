@@ -1,7 +1,19 @@
 [project]
 name = "voicechat"
 version = "0.1.0"
-description = "Add your description here"
+description = "On-device voice in and out for Claude Code and Codex: replies read aloud, push-to-talk and dictation, nothing leaves your Mac"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["claude-code", "codex", "text-to-speech", "speech-to-text", "voice", "dictation", "macos"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: MacOS X",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
 authors = [
     { name = "SPra03", email = "11s11p11sp@gmail.com" }
 ]
@@ -18,6 +30,10 @@ dependencies = [
     "sounddevice>=0.5.6",
     "soundfile>=0.14.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/SPra03/voicechat"
+Issues = "https://github.com/SPra03/voicechat/issues"
 
 [project.scripts]
 voicechat = "voicechat.cli:main"

@@ -4,3 +4,5 @@ __pycache__/
 *.wav
 .pytest_cache/
 dist/
+.DS_Store
+*.egg-info/

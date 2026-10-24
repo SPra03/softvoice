@@ -24,7 +24,7 @@ class Config:
     # Speaking
     voice: str = "alba"  # a Pocket TTS predefined voice, or a path/URL to a WAV to clone
     language: str = "english"  # Pocket TTS model id, see `voicechat voices`
-    max_chars: int = 1400  # cut cleaned replies here, at a sentence boundary
+    max_chars: int = 0  # 0 = speak the whole reply; otherwise cut here, at a sentence boundary, and say truncation_suffix
     speak_whole_turn: bool = True  # speak every substantial text block of the turn, not only the last one
     interim_min_chars: int = 200  # shorter blocks before tool calls are progress notes: skipped
     truncation_suffix: str = "More on screen."

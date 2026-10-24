@@ -7,22 +7,42 @@ talk back with a push-to-talk key. Nothing leaves your Mac.
 - **Listening**: [Parakeet TDT 0.6B v3](https://github.com/senstella/parakeet-mlx) (NVIDIA, via MLX on Apple Silicon)
 - **Integration**: the agents' own `Stop`, `Notification` and `UserPromptSubmit` hooks. No MCP server, no wrapping the terminal.
 
-English first. Apple Silicon Mac, macOS 14 or newer.
+English first. Apple Silicon Mac, macOS 14 or newer. MIT licence.
 
 ## Install
 
 ```bash
 brew install uv
-git clone <this repo> voicechat && cd voicechat
-uv sync
-uv run voicechat install
+uv tool install voicechat
+voicechat setup
+voicechat install
 ```
 
-`install` writes three hooks into `~/.claude/settings.json` (a backup is kept next to it) and,
-if `~/.codex` exists, into `~/.codex/hooks.json`. Restart your Claude Code sessions so they pick
-the hooks up. Codex needs a one-time `/hooks` to trust them.
+Until the first PyPI release, install from GitHub instead:
+`uv tool install git+https://github.com/SPra03/voicechat`. Upgrade later with
+`uv tool upgrade voicechat`.
 
-First use downloads the Pocket TTS weights (~440 MB) and, for listening, Parakeet (~1.2 GB).
+`setup` downloads the two models once (Pocket TTS, about 230 MB; Parakeet, 2.5 GB) and asks
+macOS for the permissions below. `install` writes three hooks into `~/.claude/settings.json` (a
+backup is kept next to it) and, if `~/.codex` exists, into `~/.codex/hooks.json`. Restart your
+Claude Code sessions so they pick the hooks up. Codex needs a one-time `/hooks` to trust them.
+
+Then `voicechat app --hands-free` starts the floating pill. Add it to your login items if you
+want it always there.
+
+### Permissions
+
+macOS grants these to the app that owns the terminal you run voicechat from (Terminal, iTerm,
+the Claude desktop app, VS Code), not to voicechat itself. Run it from the terminal you use for
+Claude Code, and grant them again if you switch terminals.
+
+| permission | for | asked |
+| --- | --- | --- |
+| Microphone | listening | the first time the mic opens |
+| Accessibility | pasting your words into the prompt, reading the page for the underline | by `setup`, or the first paste |
+| Input Monitoring | seeing the talk key and scroll events | by `setup`, or the first `listen` or `app` |
+
+Nothing leaves the machine: no network after the models are downloaded, no analytics.
 
 ## Hearing replies
 
@@ -35,7 +55,7 @@ hands the reply to a small daemon (started on demand, kept warm) that cleans and
 - code blocks, tables, URLs and long paths are dropped or shortened: look at the screen for those
 - markdown is flattened; bullets become sentences so the voice pauses
 - anything that looks like a key or token is replaced with "redacted"
-- long replies are cut at a sentence boundary after `max_chars` (default 1400) with "More on screen."
+- the whole reply is spoken, however long; set `max_chars` to cut long replies at a sentence boundary with "More on screen."
 - permission prompts are spoken too; sending a new prompt interrupts speech
 
 ```bash
@@ -171,7 +191,7 @@ clipboard and `listen` tells you.
 | --- | --- | --- |
 | `voice` | `alba` | a predefined voice, or a path to a short WAV to clone |
 | `language` | `english` | Pocket TTS model: `english`, `french`, `german`, `spanish`, `italian`, `portuguese`, `dutch`, or the tiny `english_18m_2026-10` |
-| `max_chars` | `1400` | where to cut long replies |
+| `max_chars` | `0` | cut long replies here; 0 speaks the whole reply |
 | `speak_whole_turn` | `true` | speak every substantial text block of the turn, not only the last |
 | `interim_min_chars` | `200` | shorter blocks before tool calls count as progress notes and are skipped |
 | `speak_notifications` | `["permission_prompt"]` | add `"idle_prompt"` to be nagged |
@@ -214,7 +234,10 @@ you ──hold key──▶ voicechat listen ──Parakeet──▶ paste into 
 
 ## Status
 
-Prototype. Verified without a human: hook latency, speech from Stop and Notification payloads,
-interruption on new prompts, the daemon's event stream, VAD end-of-utterance timing on recorded
-speech, and a Pocket TTS to Parakeet round trip. Verified live by the user: the hands-free loop. Dictation sessions were verified with recorded speech through a fake microphone. Needs a human: the pill's buttons and the live mic. Not yet: languages other than English, a single-binary build.
+Early, and in daily use by its author on an M4 MacBook Air. Verified live: the hands-free loop,
+the pill's buttons, dictation sessions, follow-along text and the underline on the page. Verified
+without a human: hook latency, speech from Stop and Notification payloads, interruption on new
+prompts, the daemon's event stream, VAD end-of-utterance timing on recorded speech, and a Pocket
+TTS to Parakeet round trip. Not yet: languages other than English, a signed app bundle, Windows
+or Linux.
 See [LANDSCAPE.md](LANDSCAPE.md) for the survey this is based on.
