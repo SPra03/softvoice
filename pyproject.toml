@@ -1,0 +1,29 @@
+[project]
+name = "voicechat"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "SPra03", email = "11s11p11sp@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.5.4",
+    "parakeet-mlx>=0.5.3",
+    "pocket-tts>=4.0.1",
+    "pynput>=1.8.2",
+    "silero-vad>=6.2.3",
+    "sounddevice>=0.5.6",
+    "soundfile>=0.14.0",
+]
+
+[project.scripts]
+voicechat = "voicechat.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
