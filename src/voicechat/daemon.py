@@ -51,6 +51,7 @@ class Engine:
         self.subscribers: list = []
         self.sub_lock = threading.Lock()
         self.stop_reason: str | None = None
+        self.last_spoken: Utterance | None = None
         self.worker = threading.Thread(target=self._run, name="speaker", daemon=True)
         self.worker.start()
 
@@ -74,6 +75,12 @@ class Engine:
             return self.status()
         if cmd == "voice":
             return self.set_voice(str(req.get("voice", "")))
+        if cmd == "replay":
+            if not self.last_spoken:
+                return {"ok": True, "skipped": "nothing to replay"}
+            self.stop_all("replay")
+            return self.enqueue(self.last_spoken.text, {"event": "replay", "session_id": "replay",
+                                                        "project": self.last_spoken.meta.get("project")}, raw=True)
         if cmd == "quit":
             self.closing = True
             self.broadcast({"event": "daemon_quit"})
@@ -201,6 +208,8 @@ class Engine:
         self.current_stop = threading.Event()
         self.stop_reason = None
         self.speaking = utt.text[:80]
+        if utt.meta.get("event") != "replay":
+            self.last_spoken = utt
         t0 = time.monotonic()
         first = [None]
         self.broadcast(self._event("speech_start", utt.meta, chars=len(utt.text)))

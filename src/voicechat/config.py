@@ -32,8 +32,18 @@ class Config:
     # Listening (push-to-talk)
     hotkey: str = "alt_r"  # pynput key name; hold to record, release to transcribe
     stt_model: str = "mlx-community/parakeet-tdt-0.6b-v3"
-    auto_submit: bool = False  # press Enter after pasting the transcript
+    auto_submit: bool = False  # press Enter after pasting; off = the transcript waits in your prompt for review
+    send_words: list[str] = field(default_factory=lambda: ["send it", "send", "go ahead and send"])  # say one at the end to send hands-free
     paste_delay_ms: int = 60
+    tap_threshold_ms: int = 350  # shorter press = tap-to-talk (voice detection ends the take); longer = push-to-talk
+    # The app's controls
+    panel: bool = True  # floating two-button pill (talk, play/stop); drag it anywhere
+    menu_bar_icon: bool = True  # status light in the menu bar
+    # Dictation session (mic click or key tap): stays open, previews live, pastes on confirm
+    dictation_pause_ms: int = 700  # pause that closes one sentence and commits it to the preview
+    dictation_silence_s: float = 8.0  # say nothing this long and the session finishes by itself
+    dictation_preview_s: float = 1.0  # how often the unfinished sentence is re-transcribed for the preview
+    dictation_max_s: float = 300.0
     # Hands-free: after a reply is spoken, open the mic, wait for you to finish, paste and send
     hands_free: bool = False
     end_silence_ms: int = 900  # how long a pause ends your utterance

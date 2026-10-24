@@ -53,6 +53,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--auto-submit", action="store_true", help="press Enter after pasting")
     p.add_argument("--no-paste", action="store_true", help="print transcripts instead of pasting")
     p.add_argument("--hands-free", action="store_true", help="after each spoken reply, open the mic and send what you say")
+    p = sub.add_parser("app", help="menu bar app: a mic icon that shows whose turn it is, with Talk, Stop, Mute, Hands-free")
+    p.add_argument("--hotkey", help="pynput key name, e.g. alt_r, cmd_r, f5")
+    p.add_argument("--auto-submit", action="store_true", help="press Enter after push-to-talk pastes")
+    p.add_argument("--no-paste", action="store_true", help="print transcripts instead of pasting")
+    hf = p.add_mutually_exclusive_group()
+    hf.add_argument("--hands-free", dest="hands_free", action="store_true", default=None)
+    hf.add_argument("--no-hands-free", dest="hands_free", action="store_false")
     p = sub.add_parser("transcribe", help="transcribe an audio file with Parakeet")
     p.add_argument("file")
 
@@ -263,6 +270,15 @@ def cmd_listen(args) -> int:
                   paste=not args.no_paste, hands_free=args.hands_free or cfg.hands_free)
 
 
+def cmd_app(args) -> int:
+    from voicechat.menubar import run_app
+
+    cfg = Config.load()
+    hands_free = cfg.hands_free if args.hands_free is None else args.hands_free
+    return run_app(cfg, hotkey=args.hotkey or cfg.hotkey, auto_submit=args.auto_submit or cfg.auto_submit,
+                   paste=not args.no_paste, hands_free=hands_free)
+
+
 def cmd_transcribe(args) -> int:
     from voicechat.stt import Transcriber
 
@@ -293,5 +309,6 @@ COMMANDS = {
     "uninstall": cmd_uninstall,
     "config": cmd_config,
     "listen": cmd_listen,
+    "app": cmd_app,
     "transcribe": cmd_transcribe,
 }
