@@ -185,7 +185,9 @@ clipboard and `listen` tells you.
 
 ## Configuration
 
-`~/.voicechat/config.toml` (`voicechat config` prints it). Restart the daemon after changes.
+`~/.voicechat/config.toml` (`voicechat config` prints it) lists every setting with its default,
+all commented out; remove the `# ` from a line to change it. Restart the daemon after changes
+(`voicechat restart`) and relaunch the app if it is running.
 
 | key | default | meaning |
 | --- | --- | --- |

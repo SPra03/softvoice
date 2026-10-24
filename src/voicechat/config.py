@@ -79,10 +79,21 @@ class Config:
         return cfg
 
     def to_toml(self) -> str:
-        lines = ["# voicechat configuration. Restart the daemon after editing: voicechat restart", ""]
+        """The config file as written for a new user: every setting shown, every line commented out.
+
+        Only uncommented lines override the defaults, so a later release can change a default
+        and existing users get it. (The first version wrote the values uncommented; that is why
+        an old `max_chars = 1400` outlived the change to 0.)
+        """
+        lines = [
+            "# voicechat configuration. Each line shows a setting with its default value;",
+            "# remove the leading '# ' to change one. Then restart: `voicechat restart`, and",
+            "# relaunch `voicechat app` if it is running.",
+            "",
+        ]
         for f in dataclasses.fields(self):
             value = getattr(self, f.name)
-            lines.append(f"{f.name} = {_toml_value(value)}")
+            lines.append(f"# {f.name} = {_toml_value(value)}")
         return "\n".join(lines) + "\n"
 
 
