@@ -171,7 +171,7 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
                 self.session.set_auto_submit(bool(sender.state))
 
         def on_config(self, _):
-            subprocess.run(["open", str(write_default_config())])
+            subprocess.run(["open", "-t", str(write_default_config())])  # -t: the default text editor; .toml has no app
 
         def on_quit(self, _=None):
             if self.panel is not None:

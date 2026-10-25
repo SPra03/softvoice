@@ -53,13 +53,19 @@ def trusted() -> bool | None:
 
 
 def _front_pid() -> int | None:
-    try:
-        from AppKit import NSWorkspace
+    from voicechat.front import front_pid
 
-        app = NSWorkspace.sharedWorkspace().frontmostApplication()
-        return int(app.processIdentifier()) if app else None
+    return front_pid()
+
+
+def _app_name(pid: int) -> str:
+    try:
+        from AppKit import NSRunningApplication
+
+        app = NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
+        return str(app.localizedName()) if app else "?"
     except Exception:
-        return None
+        return "?"
 
 
 def _to_appkit(x, y, w, h):
@@ -332,7 +338,7 @@ class Highlighter:
             if self.pid:
                 snap = snapshot_window(self.pid)
                 if snap.problem and gen == self.generation:
-                    self.log(f"underline: {snap.problem} (pid {self.pid})")
+                    self.log(f"underline: {snap.problem} ({_app_name(self.pid)}, pid {self.pid})")
         except Exception as exc:
             snap = Snapshot()
             self.log(f"underline: could not read the front window: {type(exc).__name__}: {exc}")

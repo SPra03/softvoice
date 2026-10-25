@@ -14,14 +14,36 @@ import objc
 from Foundation import NSObject
 
 
+IGNORED_BUNDLES = {"com.apple.loginwindow"}  # what a launchd-started process is sometimes told is "front"
+
+
 def front_pid() -> int | None:
+    """The pid of the app in front, which may be us (callers check). NSWorkspace first; when it
+    names nobody or loginwindow (which a process started by launchd is sometimes told), the owner
+    of the topmost ordinary window instead."""
     try:
         from AppKit import NSWorkspace
 
         app = NSWorkspace.sharedWorkspace().frontmostApplication()
-        return int(app.processIdentifier()) if app is not None else None
+        if app is not None and app.bundleIdentifier() not in IGNORED_BUNDLES:
+            return int(app.processIdentifier())
     except Exception:
-        return None
+        pass
+    return topmost_window_pid()
+
+
+def topmost_window_pid() -> int | None:
+    """Owner of the first on-screen window at the normal level (front to back), other than us."""
+    try:
+        import Quartz
+
+        for w in Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID):
+            pid = w.get("kCGWindowOwnerPID")
+            if w.get("kCGWindowLayer") == 0 and pid and pid != os.getpid():
+                return int(pid)
+    except Exception:
+        pass
+    return None
 
 
 class FrontTracker:
@@ -50,7 +72,7 @@ class FrontTracker:
             pid = int(app.processIdentifier())
         except Exception:
             return
-        if pid == os.getpid():
+        if pid == os.getpid() or app.bundleIdentifier() in IGNORED_BUNDLES:
             return
         self.pid, self.bundle, self.name = pid, app.bundleIdentifier(), app.localizedName()
 

@@ -94,3 +94,27 @@ def test_dictation_keys_swallow_return_and_escape_only():
     combo = key(KEY_RETURN, Quartz.kCGEventFlagMaskCommand)
     assert keys._callback(None, Quartz.kCGEventKeyDown, combo, None) is combo  # Cmd+Return is the app's
     assert hits == ["accept", "cancel"]
+
+
+def test_front_pid_never_reports_loginwindow(monkeypatch):
+    import AppKit
+
+    from voicechat import front
+
+    class FakeApp:
+        def processIdentifier(self):
+            return 1059
+
+        def bundleIdentifier(self):
+            return "com.apple.loginwindow"
+
+    class FakeWorkspace:
+        def frontmostApplication(self):
+            return FakeApp()
+
+    monkeypatch.setattr(AppKit.NSWorkspace, "sharedWorkspace", classmethod(lambda cls: FakeWorkspace()))
+    monkeypatch.setattr(front, "topmost_window_pid", lambda: 4242)
+    assert front.front_pid() == 4242
+    tracker = front.FrontTracker()
+    tracker.note(FakeApp())
+    assert tracker.pid is None  # loginwindow is never "the app you were in"

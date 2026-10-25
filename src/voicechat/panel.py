@@ -318,7 +318,7 @@ class MenuActions(NSObject):
     def openConfig_(self, sender):
         import subprocess
 
-        subprocess.run(["open", str(write_default_config())])
+        subprocess.run(["open", "-t", str(write_default_config())])  # .toml has no default app
 
     def quit_(self, sender):
         self.panel.on_quit()
