@@ -129,7 +129,7 @@ The pill appears at the bottom right and comes back at every login, with no term
 It runs under Python rather than your terminal, so macOS asks for the same permissions once
 more, this time for `python3.12`. Grant them and they stick.
 
-<p align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/pill-idle.png" width="84" alt="The pill at rest: a coral mic and a grey play button"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/pill-idle.png" width="95" alt="The pill at rest: a coral mic and a grey play button"></p>
 
 ### 5. Try it
 
@@ -290,7 +290,7 @@ softvoice status | log | restart
 
 ### The pill and the menu bar
 
-A small dark glass pill (36 points tall) floats above every window, bottom right by default.
+A small dark glass pill (44 points tall) floats above every window, bottom right by default.
 Drag it anywhere; it remembers the spot. Clicking it never steals focus, so your cursor stays in
 the prompt. It uses one accent colour, and the accent always means "live": the mic is coral at
 rest (talking is the next thing to do) and becomes a live coral waveform while it listens; the

@@ -63,14 +63,14 @@ from Quartz import (
 from softvoice.config import HOME_DIR, accent_rgb, write_default_config
 
 POS_PATH = HOME_DIR / "panel.json"
-BTN = 28  # a button's hit area
-ICON = 13  # symbol point size
-PAD = 4
-H = BTN + PAD * 2  # 36
-TEXT_W = 280
-BARS_W = 18  # the waveform: 5 bars of 2 pt with 2 pt gaps
-RADIUS_TEXT = 10.0  # corners while text shows; a capsule otherwise
-FADE_W = 18.0  # how much of a clipped line fades out at the edge
+BTN = 34  # a button's hit area
+ICON = 16  # symbol point size
+PAD = 5
+H = BTN + PAD * 2  # 44
+TEXT_W = 336
+BARS_W = 22  # the waveform: 5 bars of 2.5 pt with 2.4 pt gaps
+RADIUS_TEXT = 12.0  # corners while text shows; a capsule otherwise
+FADE_W = 22.0  # how much of a clipped line fades out at the edge
 W = BTN * 2 + PAD * 3
 W_DICTATION = PAD * 6 + BARS_W + TEXT_W + BTN * 3  # waveform · text · ✕ · ✓ · speaker
 W_SPEAKING = PAD * 4 + BTN * 2 + TEXT_W  # mic · sentence · speaker
@@ -81,7 +81,7 @@ N_BARS = 5
 WHITE = NSColor.whiteColor()
 GREY = NSColor.colorWithWhite_alpha_(0.70, 1.0)
 DIM = NSColor.colorWithWhite_alpha_(0.45, 1.0)
-FONT = NSFont.systemFontOfSize_(12.5)
+FONT = NSFont.systemFontOfSize_(15.0)
 
 LISTENING = {"open", "hearing", "ptt", "dictating", "dict_hearing"}
 # state -> (mic symbol, mic tint, speaker symbol, speaker tint); tints are grey | dim | white | accent
@@ -228,9 +228,9 @@ class LevelBars(NSView):
 
     def drawRect_(self, rect):
         b = self.bounds()
-        bar_w = 2.0
+        bar_w = 2.5
         gap = (b.size.width - N_BARS * bar_w) / max(1, N_BARS - 1)
-        min_h, max_h = 3.0, min(16.0, b.size.height - 4)
+        min_h, max_h = 3.5, min(19.0, b.size.height - 5)
         self.color.set()
         for i, level in enumerate(self.levels):
             h = min_h + (max_h - min_h) * level
