@@ -73,9 +73,13 @@ voicechat status | log | restart
 voicechat listen
 ```
 
-Hold **right Option**, speak, release. The transcript is pasted wherever your cursor is: the
-Claude Code prompt in a terminal, the desktop app, anything. Pressing the key also interrupts
-whatever is being spoken. `--auto-submit` presses Enter for you; `--no-paste` only prints.
+Hold the talk key, speak, release. By default that is **right Option**: the ⌥ key to the right
+of the space bar, chosen because nothing else uses it on its own. `hotkey` in the config picks
+another: a single key such as `fn` or `f5`, or a two-key combination such as `alt+space` or
+`ctrl+shift+d`. A combination is swallowed, so the app in front never sees it. The transcript is
+pasted wherever your cursor is: the Claude Code prompt in a terminal, the desktop app, anything.
+Pressing the key also interrupts whatever is being spoken. `--auto-submit` presses Enter for
+you; `--no-paste` only prints.
 
 macOS asks once for **Input Monitoring** (to see the key) and **Accessibility** (to paste) for the
 terminal you run it in, plus **Microphone**. Run `voicechat listen` from the same terminal you use
@@ -214,7 +218,7 @@ all commented out; remove the `# ` from a line to change it. Restart the daemon 
 | `speak_notifications` | `["permission_prompt"]` | add `"idle_prompt"` to be nagged |
 | `interrupt_on_prompt` | `true` | stop speaking when you send a prompt |
 | `announce_project` | `false` | prefix replies with the project folder name |
-| `hotkey` | `alt_r` | the key: `alt_r`, `alt_l`, `cmd_r`, `ctrl_r`, `shift_r`, `fn`, `f1`…`f20` |
+| `hotkey` | `alt_r` | the talk key: `alt_r`, `alt_l`, `cmd_r`, `ctrl_r`, `shift_r`, `fn`, `f1`…`f20`, or a combination such as `alt+space`, `ctrl+shift+d` (modifiers `alt`, `cmd`, `ctrl`, `shift`, `fn` plus a letter, digit, `space`, `tab` or F-key) |
 | `stt_model` | `mlx-community/parakeet-tdt-0.6b-v3` | any Parakeet model in the mlx-community collection |
 | `auto_submit` | `false` | press Enter after pasting; off means the transcript waits in your prompt for review |
 | `send_words` | `["send it", ...]` | say one at the end of a take to send it hands-free |

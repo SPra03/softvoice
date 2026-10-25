@@ -40,8 +40,8 @@ def test_strip_send_word():
 def test_resolve_key_names():
     from voicechat.hotkey import resolve_key
 
-    assert resolve_key("alt_r")[0] == 61
-    assert resolve_key("F5") == (96, None)
+    assert resolve_key("alt_r").keycode == 61
+    assert (resolve_key("F5").keycode, resolve_key("F5").flag) == (96, None)
     import pytest
     with pytest.raises(SystemExit):
         resolve_key("banana")
@@ -97,8 +97,6 @@ def test_dictation_keys_swallow_return_and_escape_only():
 
 
 def test_front_pid_never_reports_loginwindow(monkeypatch):
-    import AppKit
-
     from voicechat import front
 
     class FakeApp:
@@ -108,13 +106,36 @@ def test_front_pid_never_reports_loginwindow(monkeypatch):
         def bundleIdentifier(self):
             return "com.apple.loginwindow"
 
-    class FakeWorkspace:
-        def frontmostApplication(self):
-            return FakeApp()
-
-    monkeypatch.setattr(AppKit.NSWorkspace, "sharedWorkspace", classmethod(lambda cls: FakeWorkspace()))
+    monkeypatch.setattr(front, "workspace_front_app", lambda: FakeApp())
     monkeypatch.setattr(front, "topmost_window_pid", lambda: 4242)
     assert front.front_pid() == 4242
     tracker = front.FrontTracker()
     tracker.note(FakeApp())
     assert tracker.pid is None  # loginwindow is never "the app you were in"
+
+
+def test_talk_key_combination_is_pressed_released_and_swallowed():
+    import Quartz
+
+    from voicechat.hotkey import Hotkey, resolve_key
+
+    b = resolve_key("alt+space")
+    assert (b.keycode, b.mods, b.combo) == (49, Quartz.kCGEventFlagMaskAlternate, True)
+    assert resolve_key("ctrl+shift+d").mods == Quartz.kCGEventFlagMaskControl | Quartz.kCGEventFlagMaskShift
+    assert resolve_key("alt_r").combo is False and resolve_key("f5").combo is False
+    hits = []
+    hk = Hotkey(b, on_press=lambda: hits.append("down"), on_release=lambda: hits.append("up"))
+
+    def key(code, down, flags=0):
+        ev = Quartz.CGEventCreateKeyboardEvent(None, code, down)
+        Quartz.CGEventSetFlags(ev, flags)
+        return ev
+
+    plain = key(49, True)
+    assert hk._callback(None, Quartz.kCGEventKeyDown, plain, None) is plain  # a space is a space
+    assert hk._callback(None, Quartz.kCGEventKeyDown, key(49, True, Quartz.kCGEventFlagMaskAlternate), None) is None
+    assert hk._callback(None, Quartz.kCGEventKeyUp, key(49, False), None) is None
+    assert hits == ["down", "up"]
+    cmd = key(49, True, Quartz.kCGEventFlagMaskCommand)
+    assert hk._callback(None, Quartz.kCGEventKeyDown, cmd, None) is cmd  # cmd+space stays Spotlight's
+    assert hits == ["down", "up"]

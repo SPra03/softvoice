@@ -32,7 +32,7 @@ class Config:
     interrupt_on_prompt: bool = True  # stop speaking when you send a new prompt
     announce_project: bool = False  # prefix replies with the project folder name
     # Listening (push-to-talk)
-    hotkey: str = "alt_r"  # pynput key name; hold to record, release to transcribe
+    hotkey: str = "alt_r"  # the talk key: alt_r, alt_l, cmd_r, ctrl_r, shift_r, fn, f1..f20, or a combination such as alt+space
     stt_model: str = "mlx-community/parakeet-tdt-0.6b-v3"
     auto_submit: bool = False  # press Enter after pasting; off = the transcript waits in your prompt for review
     send_words: list[str] = field(default_factory=lambda: ["send it", "send", "go ahead and send"])  # say one at the end to send hands-free

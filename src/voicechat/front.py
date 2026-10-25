@@ -22,14 +22,18 @@ def front_pid() -> int | None:
     names nobody or loginwindow (which a process started by launchd is sometimes told), the owner
     of the topmost ordinary window instead."""
     try:
-        from AppKit import NSWorkspace
-
-        app = NSWorkspace.sharedWorkspace().frontmostApplication()
+        app = workspace_front_app()
         if app is not None and app.bundleIdentifier() not in IGNORED_BUNDLES:
             return int(app.processIdentifier())
     except Exception:
         pass
     return topmost_window_pid()
+
+
+def workspace_front_app():
+    from AppKit import NSWorkspace
+
+    return NSWorkspace.sharedWorkspace().frontmostApplication()
 
 
 def topmost_window_pid() -> int | None:

@@ -269,7 +269,7 @@ class Session:
         self.last_ptt_target: str | None = None
         self.front = None  # FrontTracker: the last front app that is not us
         self.ptt_t0 = 0.0
-        self.key: tuple[int, int | None] | None = None
+        self.key = None  # the talk key's Binding, resolved at start
         self.hotkey_tap = None
         self.dict_keys = None  # Return/Escape tap, alive only while a dictation session is open
         self.highlighter = None
@@ -497,8 +497,7 @@ class Session:
     def _start_key_listener(self) -> None:
         from voicechat.hotkey import Hotkey
 
-        keycode, flag = self.key
-        self.hotkey_tap = Hotkey(keycode, flag, self._on_press, self._on_release, on_scroll=self._on_scroll)
+        self.hotkey_tap = Hotkey(self.key, self._on_press, self._on_release, on_scroll=self._on_scroll)
 
         def install():
             if not self.hotkey_tap.install():
