@@ -14,7 +14,7 @@ import sys
 import threading
 import traceback
 
-from softvoice.config import Config, write_default_config
+from softvoice.config import CHAT_APPS, Config, write_default_config
 
 MENU_BAR_SYMBOL = "waveform"  # an SF Symbol, drawn as a template image so it matches the menu bar
 MENU_BAR_POINTS = 15.0
@@ -78,6 +78,9 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
         def level(self, level: float) -> None:  # from the audio thread, ~20 times a second
             AppHelper.callAfter(self.app.apply_level, level)
 
+        def watch_changed(self, on: bool, apps: list[str]) -> None:  # the pill's menu may have changed them
+            AppHelper.callAfter(self.app.apply_watch, on, apps)
+
     class App(rumps.App):
         def __init__(self):
             super().__init__("softvoice", title=None, quit_button=None)
@@ -95,9 +98,21 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
             self.send_item = rumps.MenuItem("Auto-send", callback=self.on_auto_send)
             self.send_item.state = 1 if auto_submit else 0
             self.pill_item = rumps.MenuItem("Hide pill", callback=self.on_toggle_pill)
+            # Chat apps without hooks: a master switch and one tick per known app, all saved to the config file.
+            self.watch_item = rumps.MenuItem("Read chat replies aloud", callback=self.on_watch_chats)
+            self.watch_item.state = 1 if cfg.watch_chats else 0
+            self.watch_menu = rumps.MenuItem("Read replies from")
+            self.watch_menu.add(self.watch_item)
+            self.watch_menu.add(rumps.separator)
+            self.watch_app_items: dict[str, rumps.MenuItem] = {}
+            for name, bundle in CHAT_APPS:
+                item = rumps.MenuItem(name, callback=lambda sender, b=bundle: self.on_watch_app(sender, b))
+                item.state = 1 if bundle in cfg.watch_apps else 0
+                self.watch_app_items[bundle] = item
+                self.watch_menu.add(item)
             self.menu = [
                 self.status, None,
-                self.talk, self.stop_item, self.mute_item, self.hf_item, self.send_item, None,
+                self.talk, self.stop_item, self.mute_item, self.hf_item, self.send_item, self.watch_menu, None,
                 self.pill_item, rumps.MenuItem("Open config file", callback=self.on_config), None,
                 rumps.MenuItem("Quit softvoice", callback=self.on_quit),
             ]
@@ -169,6 +184,21 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
             sender.state = 0 if sender.state else 1
             if self.session:
                 self.session.set_auto_submit(bool(sender.state))
+
+        def on_watch_chats(self, sender):
+            sender.state = 0 if sender.state else 1
+            if self.session:
+                self.session.set_watch_chats(bool(sender.state))
+
+        def on_watch_app(self, sender, bundle: str):
+            sender.state = 0 if sender.state else 1
+            if self.session:
+                self.session.set_watch_app(bundle, bool(sender.state))
+
+        def apply_watch(self, on: bool, apps: list[str]) -> None:
+            self.watch_item.state = 1 if on else 0
+            for bundle, item in self.watch_app_items.items():
+                item.state = 1 if bundle in apps else 0
 
         def on_config(self, _):
             subprocess.run(["open", "-t", str(write_default_config())])  # -t: the default text editor; .toml has no app

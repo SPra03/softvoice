@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,6 +18,12 @@ CONFIG_PATH = HOME_DIR / "config.toml"
 SOCKET_PATH = HOME_DIR / "daemon.sock"
 LOG_PATH = HOME_DIR / "daemon.log"
 PID_PATH = HOME_DIR / "daemon.pid"
+
+# Chat apps without hooks whose replies the watcher can read aloud: (menu name, bundle id). One line per app.
+CHAT_APPS: tuple[tuple[str, str], ...] = (
+    ("Claude", "com.anthropic.claudefordesktop"),
+    ("ChatGPT", "com.openai.chat"),
+)
 
 
 @dataclass
@@ -64,6 +71,9 @@ class Config:
         "com.anthropic.claudefordesktop", "com.microsoft.VSCode", "com.microsoft.VSCodeInsiders",
         "com.todesktop.230313mzl4w4u92", "com.exafunction.windsurf", "com.jetbrains.*", "com.openai.*",
     ])
+    # Chat apps without hooks (the Claude app's chat, ChatGPT): read each new reply aloud while the app is in front
+    watch_chats: bool = False  # the master switch; off means no polling at all
+    watch_apps: list[str] = field(default_factory=list)  # bundle ids ticked under "Read replies from", see CHAT_APPS
 
     @classmethod
     def load(cls, path: Path = CONFIG_PATH) -> "Config":
@@ -128,3 +138,29 @@ def write_default_config(overwrite: bool = False) -> Path:
     if overwrite or not CONFIG_PATH.exists():
         CONFIG_PATH.write_text(Config().to_toml())
     return CONFIG_PATH
+
+
+def save_setting(name: str, value, path: Path = CONFIG_PATH) -> Path:
+    """Persist one setting changed from a menu: the file's own line for it (commented out or not)
+    becomes `name = value`; a file without such a line gets one appended. Everything else stays."""
+    if not any(f.name == name for f in dataclasses.fields(Config)):
+        raise KeyError(name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = path.read_text() if path.exists() else Config().to_toml()
+    lines = text.split("\n")
+    line = f"{name} = {_toml_value(value)}"
+    pattern = re.compile(rf"^\s*(#\s*)?{re.escape(name)}\s*=")
+    hits = [i for i, l in enumerate(lines) if pattern.match(l)]
+    if hits:
+        for i in hits[1:]:  # a duplicate (one commented, one live) would shadow the change
+            lines[i] = ""
+        lines[hits[0]] = line
+    else:
+        if lines and lines[-1] != "":
+            lines.append("")
+        lines.append(line)
+    out = "\n".join(lines)
+    if not out.endswith("\n"):
+        out += "\n"
+    path.write_text(out)
+    return path

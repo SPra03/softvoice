@@ -28,6 +28,7 @@ SCROLL_GAP_S = 1 / 60  # while scrolling, re-read at most this often
 MAX_BARS = 6
 UNDERLINE_H = 2.0  # the underline's thickness, in points
 UNDERLINE_GAP = 1.0  # how far below the line box it sits
+SKIP = object()  # an `on_node` callback returns this to leave an element and its subtree out
 
 
 def _ax():
@@ -93,6 +94,7 @@ class Snapshot:
     window: object = None
     frame: tuple | None = None
     segments: list[tuple[object, str, int]] = field(default_factory=list)  # (node, text, offset)
+    contexts: list = field(default_factory=list)  # per segment, what `on_node` returned for its subtree
     joined: str = ""
     taken_at: float = 0.0
     problem: str = ""  # why there is nothing to underline, for the log
@@ -114,7 +116,11 @@ def _pick_window(AS, app):
     return windows[0] if windows else None
 
 
-def snapshot_window(pid: int) -> Snapshot:
+def snapshot_window(pid: int, on_node=None) -> Snapshot:
+    """The main window's text in reading order. `on_node(AS, node, role, ctx)`, when given, sees every
+    element with the context its parent returned (None at the window) and returns the context for the
+    element's text and children, or SKIP to leave the subtree out; the chat watcher uses it to tell
+    messages apart. The underline passes nothing and pays nothing extra."""
     if pid == os.getpid():
         return Snapshot()
     AS = _ax()
@@ -137,27 +143,32 @@ def snapshot_window(pid: int) -> Snapshot:
         snap.problem = f"no window readable ({why})"
         return snap
     snap.frame = element_frame(window)
-    stack = [(window, 0)]  # depth-first, children in order: reading order
+    stack = [(window, 0, None)]  # depth-first, children in order: reading order
     seen = 0
-    pieces: list[tuple[object, str]] = []
+    pieces: list[tuple[object, str, object]] = []
     deadline = time.monotonic() + WALK_BUDGET_S
     while stack and seen < MAX_NODES and time.monotonic() < deadline:
-        node, depth = stack.pop()
+        node, depth, ctx = stack.pop()
         seen += 1
         role = _attr(AS, node, "AXRole")
         if role in SKIP_ROLES or depth > 60:
             continue
+        if on_node is not None:
+            ctx = on_node(AS, node, role, ctx)
+            if ctx is SKIP:
+                continue
         if role in TEXT_ROLES:
             value = _attr(AS, node, "AXValue")
             if isinstance(value, str) and value.strip():
-                pieces.append((node, value))
+                pieces.append((node, value, ctx))
         children = _attr(AS, node, "AXChildren")
         if children:
-            stack.extend((c, depth + 1) for c in reversed(children))
+            stack.extend((c, depth + 1, ctx) for c in reversed(children))
     offset = 0
     parts = []
-    for node, text in pieces:
+    for node, text, ctx in pieces:
         snap.segments.append((node, text, offset))
+        snap.contexts.append(ctx)
         parts.append(text)
         offset += len(text) + 1  # one space between pieces
     snap.joined = " ".join(parts)
