@@ -259,7 +259,7 @@ def cmd_setup(args) -> int:
     except Exception as exc:
         print(f"Microphone: could not open ({exc})")
     permissions.check_and_request(need_paste=True, need_hotkey=True)
-    print("Next: `softvoice install` adds the hooks, then `softvoice app --hands-free` starts the pill.")
+    print("Next: `softvoice install` adds the hooks, then `softvoice autostart on` starts the pill and keeps it at every login.")
     return 0
 
 

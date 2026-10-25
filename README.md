@@ -86,7 +86,12 @@ brew install uv
 uv tool install softvoice
 ```
 
+`uv --version` should answer 0.8 or newer. If an older uv from conda or pip sits first on your PATH,
+that is the one that runs.
+
 (Or the newest commit straight from GitHub: `uv tool install git+https://github.com/SPra03/softvoice`.)
+If the next step says `softvoice: command not found`, run `uv tool update-shell` and open a new
+terminal: uv puts its tools in `~/.local/bin`, which a fresh Mac does not have on its PATH.
 
 ### 2. Download the models and grant the permissions
 
@@ -108,8 +113,10 @@ Permissions (granted to the app this terminal belongs to):
 Microphone: opened
 Input Monitoring: granted (push-to-talk key)
 Accessibility: granted (pasting)
-Next: `softvoice install` adds the hooks, then `softvoice app --hands-free` starts the pill.
+Next: `softvoice install` adds the hooks, then `softvoice autostart on` starts the pill and keeps it at every login.
 ```
+
+A line about setting `HF_TOKEN` for faster downloads may appear above that; it is harmless.
 
 macOS grants permissions to the app that owns the terminal you ran `setup` from (Terminal, iTerm,
 the Claude desktop app, VS Code), not to softvoice itself. When a prompt appears, click **Open
@@ -133,9 +140,9 @@ softvoice install
 ```
 
 This writes three hooks (`Stop`, `Notification`, `UserPromptSubmit`) into `~/.claude/settings.json`,
-keeping a backup next to it, and into `~/.codex/hooks.json` if `~/.codex` exists. Sessions that are
-already open keep their old settings: start a new Claude Code session, and in Codex run `/hooks`
-once to trust them.
+keeping a backup next to it, and into `~/.codex/hooks.json` if `~/.codex` exists. The Claude desktop app
+picks them up in open sessions within a second; a Claude Code CLI session that was open before
+needs a restart, and in Codex run `/hooks` once to trust them.
 
 ### 4. Start the pill
 
@@ -145,7 +152,10 @@ softvoice autostart on
 
 The pill appears at the bottom right and comes back at every login, with no terminal left open.
 It runs under Python rather than your terminal, so macOS asks for the same permissions once
-more, this time for `python3.12`. Grant them and they stick.
+more, this time for `python3.12` (or whichever Python uv chose). Grant them and they stick.
+
+Installing with an AI agent? It may refuse to create the login item, since that looks like
+persistence to its safety rules. Run this one line yourself.
 
 <p align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/pill-idle.png" width="95" alt="The pill at rest: a coral mic and a grey play button"></p>
 
@@ -165,7 +175,7 @@ while running. The models load once at start; idle, it uses no CPU.
 
 | symptom | what to check |
 | --- | --- |
-| nothing is spoken | `softvoice status` shows the daemon and `softvoice log` the hook calls. Hooks are read when a session starts, so only new Claude Code sessions speak. |
+| nothing is spoken | `softvoice status` shows the daemon and `softvoice log` the hook calls. A CLI session opened before the install needs a restart. |
 | no pill | `softvoice autostart` shows the login item; **Show pill** in the menu bar brings back a hidden one; `~/.softvoice/app.log` says why it did not start. |
 | the talk key does nothing | Input Monitoring for the app that runs the pill: `python3.12` under the login item, your terminal's app otherwise. |
 | your words are not pasted | Accessibility for the same app. Meanwhile the text is on the clipboard, so ⌘V works. |
@@ -177,6 +187,7 @@ while running. The models load once at start; idle, it uses no CPU.
 ```bash
 softvoice uninstall         # removes the hooks
 softvoice autostart off     # removes the login item and stops the app
+softvoice quit              # stops the voice daemon
 uv tool uninstall softvoice
 rm -rf ~/.softvoice         # config and logs
 ```
@@ -325,7 +336,7 @@ Parakeet, the pill and the underline.
 
 Early, and in daily use by its author on an M4 MacBook Air. Verified live: the hands-free loop,
 the pill, dictation sessions with Enter and Escape, the Option+Space talk key, follow-along text
-and the underline on the page. Verified without a human: hook latency, speech from Stop and
+and the underline on the page. Python 3.12 and 3.14 both pass the tests and load both models. Verified without a human: hook latency, speech from Stop and
 Notification payloads, interruption on new prompts, the daemon's event stream, VAD end-of-utterance
 timing on recorded speech, and a Pocket TTS to Parakeet round trip. Not yet: languages other than
 English, a signed app bundle, Windows or Linux (the listener needs Apple's MLX).

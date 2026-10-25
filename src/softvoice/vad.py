@@ -9,9 +9,13 @@ FRAME = 512  # samples per VAD step at 16 kHz (32 ms), fixed by the model
 
 
 def load_model():
+    import warnings
+
     from silero_vad import load_silero_vad
 
-    return load_silero_vad()
+    with warnings.catch_warnings():  # torch.jit.load is deprecated, says torch, on every start
+        warnings.simplefilter("ignore", FutureWarning)
+        return load_silero_vad()
 
 
 class UtteranceDetector:
