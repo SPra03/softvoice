@@ -24,6 +24,27 @@ sent anywhere: after a one-time model download it works with the network unplugg
 
 English first (the listener understands 24 other European languages; the voice has English, French, German, Spanish, Italian, Portuguese and Dutch). Apple Silicon Mac, macOS 14 or newer. MIT licence. Early, and in daily use by its author.
 
+## What it does
+
+Two things, both on device.
+
+### Dictation: you talk, your agent gets text
+
+- **Click the mic or press the talk key.** Option+Space, or any key you choose. Speak for as
+  long as you like.
+- **Watch the words land.** Sentences appear in the pill as you say them, so you can check them
+  before they go anywhere.
+- **Enter pastes, Escape discards.** The text goes into whatever has focus: Claude Code, Codex,
+  or any other app.
+
+### Speech: your agent talks, you listen
+
+- **Replies read themselves.** When Claude Code or Codex finishes a turn, the reply is spoken.
+  The pill shows the sentence being read and a thin underline follows it in the terminal.
+  Nothing to press.
+- **Read anything.** Select text in any app and click the speaker. It reads the selection.
+- **Stop whenever you like.** Tap the talk key or click the speaker.
+
 ## Set up
 
 Five steps, about ten minutes, most of it the model download. [uv](https://docs.astral.sh/uv/)
