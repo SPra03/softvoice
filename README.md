@@ -30,8 +30,8 @@ Two things, both on device.
 
 ### Dictation: you talk → your agent listens
 
-- **Click the mic or press the talk key.** Option+Space, or any key you choose. Speak for as
-  long as you like.
+- **Click the mic or tap right Option.** That is the ⌥ key right of the space bar; the left one
+  does nothing. Speak for as long as you like.
 - **Watch the words land.** Sentences appear in the pill as you say them, so you can check them
   before they go anywhere.
 - **Enter pastes, Escape discards.** The text goes into whatever has focus: Claude Code, Codex,
@@ -47,14 +47,32 @@ Two things, both on device.
 
 ## Features
 
-- **Offline.** Everything runs on your Mac, so it works offline.
-- **Private.** No audio or data ever leaves the machine.
-- **Lightweight.** Lighter than a handful of browser tabs (max 2.4 GB). The CPU sits at
-  0% until you talk: under 1% while you dictate; 27 seconds of speech transcribe in 0.6 s.
-- **Multilingual.** Understands 25 European languages, speaks 7.
-- **Auto reply.** Replies are read aloud the moment the agent finishes. Hands-free
-  mode then opens the mic for your next turn.
-- **Multi-voice.** 27 voices, or clone your own from a short WAV.
+<table>
+<tr>
+<td width="50%" valign="top"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/icons/offline.svg" width="28" alt=""><br><b>Offline</b><br>Everything runs on your Mac, so it works offline.</td>
+<td width="50%" valign="top"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/icons/private.svg" width="28" alt=""><br><b>Private</b><br>No audio or data ever leaves the machine.</td>
+</tr>
+<tr>
+<td valign="top"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/icons/reply.svg" width="28" alt=""><br><b>Auto reply</b><br>Replies are read aloud the moment the agent finishes. Hands-free mode then opens the mic for your next turn.</td>
+<td valign="top"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/icons/multilingual.svg" width="28" alt=""><br><b>Multilingual, multi-voice</b><br>Understands 25 European languages, speaks 7. 27 voices, or clone your own from a short WAV.</td>
+</tr>
+<tr>
+<td colspan="2" valign="top"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/icons/lightweight.svg" width="28" alt=""><br><b>Lightweight</b><br>Lighter than a handful of browser tabs (max 2.4 GB). The CPU sits at 0% until you talk: under 1% while you dictate; 27 seconds of speech transcribe in 0.6 s.</td>
+</tr>
+</table>
+
+## Hotkeys
+
+One key does everything: the **right** Option key, <kbd>right ⌥</kbd>, the one just right of the space bar. The left Option key does nothing. Prefer a combination? Set `hotkey = "alt+space"` in the config.
+
+<table>
+<tr><td align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/icons/mic.svg" width="24" alt=""></td><td nowrap><kbd>right ⌥</kbd> tap</td><td><b>Dictate.</b> Talk as long as you like; your sentences appear in the pill.</td></tr>
+<tr><td align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/icons/check.svg" width="24" alt=""></td><td nowrap><kbd>⏎ Enter</kbd></td><td><b>Paste</b> the dictation into your prompt.</td></tr>
+<tr><td align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/icons/x.svg" width="24" alt=""></td><td nowrap><kbd>⎋ Esc</kbd></td><td><b>Discard</b> it.</td></tr>
+<tr><td align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/icons/zap.svg" width="24" alt=""></td><td nowrap><kbd>right ⌥</kbd> hold</td><td><b>Push-to-talk.</b> Say a quick one-liner, let go, and it is pasted.</td></tr>
+</table>
+
+Hands-free has voice keys too: end with "send" to send, say "cancel" to discard.
 
 ## Set up
 
@@ -173,7 +191,7 @@ the right is the agent talking to you. Exactly one thing on the pill is coral at
 is the thing to tap next. Most of the time you will not touch the pill at all: replies read
 themselves, and the **talk key** does the rest.
 
-The talk key is **right Option** by default: the ⌥ key to the right of the space bar, chosen
+The talk key is **right Option** by default: the ⌥ key to the right of the space bar (the left one does nothing), chosen
 because nothing else uses it on its own. Prefer a combination? One line in the config:
 `hotkey = "alt+space"` (or `ctrl+shift+d`, `fn+space`, ...). A combination is swallowed, so the
 app in front never sees it.
@@ -398,4 +416,4 @@ Found a rough edge? Open an issue with the lines from `softvoice log` and `~/.so
 by NVIDIA (CC-BY-4.0), converted for MLX by the [mlx-community](https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3)
 and run with [parakeet-mlx](https://github.com/senstella/parakeet-mlx) by senstella. [Silero VAD](https://github.com/snakers4/silero-vad)
 for end-of-utterance detection. [rumps](https://github.com/jaredks/rumps) for the menu bar. See
-[LANDSCAPE.md](LANDSCAPE.md) for the survey of voice tools this started from.
+[LANDSCAPE.md](LANDSCAPE.md) for the survey of voice tools this started from. Icons by [Lucide](https://lucide.dev) (ISC).
