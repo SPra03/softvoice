@@ -21,6 +21,7 @@ SKIP_ROLES = {"AXApplication", "AXMenuBar", "AXMenuBarItem", "AXMenu", "AXMenuIt
 MAX_NODES = 8000
 WALK_BUDGET_S = 3.0
 WINDOW_WAIT_S = 4.0
+AX_TIMEOUT_S = 1.5  # a busy app (Electron re-rendering a long reply) answers late; give up on a call this soon and retry
 RECOLLECT_EVERY_S = 1.5
 IDLE_POLL_S = 0.5  # safety re-read of the underline's position when no scroll event arrives
 SCROLL_GAP_S = 1 / 60  # while scrolling, re-read at most this often
@@ -50,6 +51,16 @@ def trusted() -> bool | None:
         return bool(_ax().AXIsProcessTrusted())
     except Exception:
         return None
+
+
+def screen_locked() -> bool:
+    """While the screen is locked every app answers accessibility with an empty shell, so reading is pointless."""
+    try:
+        import Quartz
+
+        return bool((Quartz.CGSessionCopyCurrentDictionary() or {}).get("CGSSessionScreenIsLocked", 0))
+    except Exception:
+        return False
 
 
 def _front_pid() -> int | None:
@@ -93,8 +104,10 @@ class Snapshot:
 
 
 def _pick_window(AS, app):
-    """The app's main window: role AXWindow, main if possible, else the first."""
-    windows = [w for w in (_attr(AS, app, "AXWindows") or []) if _attr(AS, w, "AXRole") == "AXWindow"]
+    """The app's main window: role AXWindow, main if possible, else the first. A busy app may list its
+    windows but not answer for them yet; then the first listed window is taken as it is."""
+    listed = list(_attr(AS, app, "AXWindows") or [])
+    windows = [w for w in listed if _attr(AS, w, "AXRole") == "AXWindow"] or listed
     for w in windows:
         if _attr(AS, w, "AXMain"):
             return w
@@ -105,6 +118,10 @@ def snapshot_window(pid: int) -> Snapshot:
     if pid == os.getpid():
         return Snapshot()
     AS = _ax()
+    try:  # calls into a busy app would otherwise hang for the 6 s system default, each
+        AS.AXUIElementSetMessagingTimeout(AS.AXUIElementCreateSystemWide(), AX_TIMEOUT_S)
+    except Exception:
+        pass
     app = AS.AXUIElementCreateApplication(pid)
     # Electron apps keep their accessibility tree off until a client asks for it, and need a moment.
     AS.AXUIElementSetAttributeValue(app, "AXManualAccessibility", True)
@@ -116,7 +133,8 @@ def snapshot_window(pid: int) -> Snapshot:
     snap = Snapshot(window=window, taken_at=time.monotonic())
     if window is None:
         err, _ = AS.AXUIElementCopyAttributeValue(app, "AXWindows", None)
-        snap.problem = f"no window readable ({AX_ERRORS.get(err, f'accessibility error {err}')})"
+        why = "the app lists no window yet" if err == 0 else AX_ERRORS.get(err, f"accessibility error {err}")
+        snap.problem = f"no window readable ({why})"
         return snap
     snap.frame = element_frame(window)
     stack = [(window, 0)]  # depth-first, children in order: reading order
@@ -310,6 +328,9 @@ class Highlighter:
         self.last_other_pid: int | None = None  # the last front app that wasn't us
         self.snap: Snapshot | None = None
         self.generation = 0  # bumped per reply
+        self.began_at = 0.0
+        self.collecting = False  # a background read of the window is in flight
+        self.problem_gen = 0  # the reply whose first unreadable window was logged, so retries stay quiet
         self.show_seq = 0  # bumped per sentence shown, and on hide: stops the older follow loops
         self.moved = threading.Event()  # set by nudge(): the page scrolled, re-read now
 
@@ -324,6 +345,7 @@ class Highlighter:
         elif self.other_pid is not None:  # we are in front: the session knows who was before us
             self.last_other_pid = self.other_pid() or self.last_other_pid
         self.pid = self.last_other_pid  # never read our own pill; it carries the same sentence
+        self.began_at = time.monotonic()
         with self.lock:
             self.snap = None
         if not self.pid:
@@ -333,19 +355,40 @@ class Highlighter:
         threading.Thread(target=self._collect, args=(self.generation,), daemon=True).start()
 
     def _collect(self, gen: int) -> Snapshot | None:
+        with self.lock:
+            self.collecting = True
         snap = None
         try:
-            if self.pid:
+            if self.pid and screen_locked():
+                snap = Snapshot(taken_at=time.monotonic(), problem="the screen is locked")
+                if gen == self.generation and self.problem_gen != gen:
+                    self.problem_gen = gen
+                    self.log("underline: the screen is locked; waiting for it to unlock")
+            elif self.pid:
                 snap = snapshot_window(self.pid)
-                if snap.problem and gen == self.generation:
-                    self.log(f"underline: {snap.problem} ({_app_name(self.pid)}, pid {self.pid})")
+                if gen == self.generation:
+                    if snap.problem and self.problem_gen != gen:  # the first failure of this reply; retries stay quiet
+                        self.problem_gen = gen
+                        self.log(f"underline: {snap.problem} ({_app_name(self.pid)}, pid {self.pid}); retrying while it speaks")
+                    elif not snap.problem and self.problem_gen == gen:
+                        self.problem_gen = 0
+                        self.log(f"underline: the window became readable after {time.monotonic() - self.began_at:.0f} s")
         except Exception as exc:
             snap = Snapshot()
             self.log(f"underline: could not read the front window: {type(exc).__name__}: {exc}")
         with self.lock:
+            self.collecting = False
             if gen == self.generation:
                 self.snap = snap
         return snap
+
+    def _recollect(self, gen: int) -> None:
+        """Read the window again in the background, unless a read is already running."""
+        with self.lock:
+            if self.collecting or gen != self.generation:
+                return
+            self.collecting = True
+        threading.Thread(target=self._collect, args=(gen,), daemon=True).start()
 
     def show_for(self, sentence: str) -> None:
         self.show_seq += 1
@@ -369,14 +412,11 @@ class Highlighter:
         if not self._current(gen, seq) or snap is None:
             return
         rects = self._rects(sentence, snap)
-        if not rects and time.monotonic() - snap.taken_at > RECOLLECT_EVERY_S:
-            snap = self._collect(gen)  # the page may have re-rendered or scrolled: read it again
-            if not self._current(gen, seq) or snap is None:
-                return
-            rects = self._rects(sentence, snap)
         shown = None
         last_read = time.monotonic()
         while self._current(gen, seq):  # follow the text while this sentence is being spoken
+            if not rects and time.monotonic() - snap.taken_at > RECOLLECT_EVERY_S:
+                self._recollect(gen)  # a busy app, a re-rendered page or text scrolled away: read it again
             if rects != shown:
                 shown = rects
                 if rects:
@@ -390,6 +430,10 @@ class Highlighter:
                 time.sleep(gap)
             if not self._current(gen, seq):
                 return
+            with self.lock:
+                latest = self.snap if gen == self.generation else None
+            if latest is not None and latest is not snap:
+                snap = latest  # a fresh read landed
             rects = self._rects(sentence, snap)  # same nodes, fresh positions
             last_read = time.monotonic()
 

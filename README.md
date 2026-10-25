@@ -179,8 +179,9 @@ while running. The models load once at start; idle, it uses no CPU.
 | no pill | `softvoice autostart` shows the login item; **Show pill** in the menu bar brings back a hidden one; `~/.softvoice/app.log` says why it did not start. |
 | the talk key does nothing | Input Monitoring for the app that runs the pill: `python3.12` under the login item, your terminal's app otherwise. |
 | your words are not pasted | Accessibility for the same app. Meanwhile the text is on the clipboard, so ⌘V works. |
-| no underline on the page | the app has to start after Accessibility is granted (under the login item it restarts itself). Some apps expose no text; the app log says so. |
+| no underline on the page | the app has to start after Accessibility is granted (under the login item it restarts itself). Some apps expose no text, and a locked screen hides every window; the app log says which. |
 | the mic hears nothing | Microphone for that app, under Privacy & Security > Microphone. |
+| everything stopped after an upgrade or reinstall | uv may have switched the tool to another Python, which macOS treats as a new app: `~/.softvoice/app.log` says NOT granted. Grant the three permissions again, or `uv tool install --reinstall --python 3.12 softvoice` to go back to the one you already trusted. |
 
 ### Uninstall
 
