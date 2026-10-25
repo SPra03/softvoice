@@ -1,6 +1,6 @@
 [project]
 name = "softvoice"
-version = "0.1.0"
+version = "0.1.1"
 description = "On-device voice in and out for Claude Code and Codex: replies read aloud, push-to-talk and dictation, nothing leaves your Mac"
 readme = "README.md"
 license = "MIT"
