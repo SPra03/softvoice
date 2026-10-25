@@ -14,9 +14,8 @@
 <p align="center"><sub>45 seconds, no cuts: a prompt dictated into Claude Code, sent with Enter, and the reply read aloud while the pill and a thin underline follow along.</sub></p>
 
 An open-source, offline tool to Converse with your coding agent. Tired of reading claude/codex
-outputs all day long, I made this tool to listen instead of reading my claude/codex outputs. Its
-just like having a conversation, without spending a dime. Drag the pill anywhere to place and use
-it across apps.
+outputs all day long, I made this tool to listen instead. It's just like having a conversation,
+without spending a dime. Drag the pill anywhere to place and use it across apps.
 
 Under the hood: [Pocket TTS](https://github.com/kyutai-labs/pocket-tts) by Kyutai is the voice,
 [Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) by NVIDIA is the ear,
