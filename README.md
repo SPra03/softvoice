@@ -9,7 +9,9 @@
 ![On-device](https://img.shields.io/badge/your%20voice%20%26%20text-never%20leave%20your%20Mac-blue)
 [![CI](https://github.com/SPra03/softvoice/actions/workflows/ci.yml/badge.svg)](https://github.com/SPra03/softvoice/actions/workflows/ci.yml)
 
-<p align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/pill-speaking.png" width="368" alt="The pill while a reply is read aloud: the words already spoken are white, the rest grey, and a coral stop button"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/demo.gif" width="720" alt="45 seconds, no cuts: a prompt is dictated into Claude Code in Terminal, the live transcript shows in the pill, Enter pastes and sends it, and the reply is read aloud while the pill shows the sentence being spoken and a thin underline follows it in the terminal"></p>
+
+<p align="center"><sub>45 seconds, no cuts: a prompt dictated into Claude Code, sent with Enter, and the reply read aloud while the pill and a thin underline follow along.</sub></p>
 
 Your coding agent finishes a turn and reads its reply aloud, underlining each sentence on the
 page as it goes. You answer by talking: tap a key, say what you want, press Enter. A small glass
@@ -219,6 +221,8 @@ the reply to a small daemon (started on demand, kept warm) that cleans it up and
 - permission prompts are spoken too, so you hear when the agent is waiting for you
 
 #### While it speaks
+
+<p align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/pill-speaking.png" width="368" alt="The pill while a reply is read aloud: the words already spoken are white, the rest grey, and a coral stop button"></p>
 
 - **Stop it**: tap the talk key, or click the speaker (the coral stop button). Sending a new
   prompt stops it as well.
