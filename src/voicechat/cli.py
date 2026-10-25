@@ -326,7 +326,7 @@ def cmd_autostart(args) -> int:
     if args.action == "on":
         other = instance.running_pid()
         if other:
-            print(f"stopping the copy started by hand (pid {other}) so the login item owns the app ...", flush=True)
+            print(f"stopping the running copy (pid {other}) so the login item starts it fresh ...", flush=True)
             if not instance.quit(other):
                 print("it did not stop; quit it yourself and run this again")
                 return 1

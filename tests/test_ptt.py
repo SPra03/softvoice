@@ -71,3 +71,26 @@ def test_front_tracker_ignores_our_own_process():
     assert (t.pid, t.bundle, t.name) == (4242, "com.anthropic.claudefordesktop", "Claude")
     t.note(None)
     assert t.pid == 4242
+
+
+def test_dictation_keys_swallow_return_and_escape_only():
+    import Quartz
+
+    from voicechat.hotkey import KEY_ESCAPE, KEY_RETURN, DictationKeys
+
+    hits = []
+    keys = DictationKeys(on_accept=lambda: hits.append("accept"), on_cancel=lambda: hits.append("cancel"))
+
+    def key(code, flags=0):
+        ev = Quartz.CGEventCreateKeyboardEvent(None, code, True)
+        Quartz.CGEventSetFlags(ev, flags)
+        return ev
+
+    assert keys._callback(None, Quartz.kCGEventKeyDown, key(KEY_RETURN), None) is None
+    assert keys._callback(None, Quartz.kCGEventKeyDown, key(KEY_ESCAPE), None) is None
+    assert hits == ["accept", "cancel"]
+    letter = key(0)  # 'a'
+    assert keys._callback(None, Quartz.kCGEventKeyDown, letter, None) is letter
+    combo = key(KEY_RETURN, Quartz.kCGEventFlagMaskCommand)
+    assert keys._callback(None, Quartz.kCGEventKeyDown, combo, None) is combo  # Cmd+Return is the app's
+    assert hits == ["accept", "cancel"]

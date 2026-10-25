@@ -28,7 +28,7 @@ DETAILS = {
     "ptt": "Recording… release to send",
     "transcribing": "Transcribing…",
     "review": "In your prompt. Edit if you like, then press Enter.",
-    "dictating": "Dictating… ✓ when done, ✕ to discard",
+    "dictating": "Dictating… Enter or ✓ when done, Esc or ✕ to discard",
     "dict_hearing": "Hearing you…",
     "muted": "Muted",
 }

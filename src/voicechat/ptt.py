@@ -271,6 +271,7 @@ class Session:
         self.ptt_t0 = 0.0
         self.key: tuple[int, int | None] | None = None
         self.hotkey_tap = None
+        self.dict_keys = None  # Return/Escape tap, alive only while a dictation session is open
         self.highlighter = None
         self.highlight_enabled = cfg.highlight_on_page
         self.transcriber = None
@@ -283,7 +284,7 @@ class Session:
         """Load models, open the mic, start the key watcher and the daemon event feed. Blocks a few seconds."""
         from voicechat.client import ensure_daemon
         from voicechat.hotkey import resolve_key
-        from voicechat.permissions import check_and_request, input_monitoring
+        from voicechat.permissions import accessibility, check_and_request, input_monitoring
         from voicechat.stt import Transcriber
         from voicechat.vad import UtteranceDetector
 
@@ -301,6 +302,8 @@ class Session:
             self.ui.log(f"hands-free: after each spoken reply the mic opens (beep). Pause {self.cfg.end_silence_ms / 1000:.1f}s "
                         f"to send; say \"{self.cfg.cancel_words[0]}\" to discard; silence for {self.cfg.listen_timeout_s:.0f}s closes the mic.")
         check_and_request(need_paste=self.paste, need_hotkey=True, out=self.ui.log)
+        if accessibility() is False:
+            threading.Thread(target=self._wait_for_accessibility, name="ax-wait", daemon=True).start()
         self.ui.log("Microphone: if nothing is ever heard, enable this terminal's app under Privacy & Security > Microphone.")
         if input_monitoring() in ("granted", "unavailable"):
             self._start_key_listener()
@@ -318,7 +321,8 @@ class Session:
                 from voicechat.highlight import Highlighter
 
                 self.highlighter = Highlighter(self.ui.run_on_main, accent_rgb(self.cfg.underline),
-                                               other_pid=lambda: self.front.pid if self.front else None)
+                                               other_pid=lambda: self.front.pid if self.front else None,
+                                               log=self.ui.log)
             except Exception as exc:
                 self.ui.log(f"on-page highlight unavailable: {exc}")
         threading.Thread(target=self._event_loop, name="events", daemon=True).start()
@@ -345,6 +349,7 @@ class Session:
         self.auto_cancel.set()
         if self.hotkey_tap is not None:
             self.ui.run_on_main(self.hotkey_tap.remove)
+        self.ui.run_on_main(self._dict_keys_off)
         if self.recorder:
             self.recorder.close()
 
@@ -378,11 +383,27 @@ class Session:
         self.dict_cancel.clear()
         threading.Thread(target=self._dictation_loop, args=(continue_recording,), name="dictation", daemon=True).start()
 
-    def finish_dictation(self) -> None:  # ✓
+    def finish_dictation(self) -> None:  # ✓, or Return
         self.dict_finish.set()
 
-    def cancel_dictation(self) -> None:  # ✕
+    def cancel_dictation(self) -> None:  # ✕, or Escape
         self.dict_cancel.set()
+
+    def _dict_keys_on(self) -> None:  # main thread
+        from voicechat.hotkey import DictationKeys
+
+        if self.dict_keys is None:
+            keys = DictationKeys(self.finish_dictation, self.cancel_dictation)
+            if keys.install():
+                self.dict_keys = keys
+            elif not getattr(self, "_dict_keys_warned", False):
+                self._dict_keys_warned = True
+                self.ui.log("  (Enter/Escape for dictation unavailable: Input Monitoring is not granted)")
+
+    def _dict_keys_off(self) -> None:  # main thread
+        if self.dict_keys is not None:
+            self.dict_keys.remove()
+            self.dict_keys = None
 
     def stop_speaking(self) -> None:
         threading.Thread(target=_interrupt_speech, args=("menu",), daemon=True).start()
@@ -488,6 +509,24 @@ class Session:
     def _on_scroll(self) -> None:  # main thread, on every scroll event: just a flag for the underline
         if self.highlighter is not None:
             self.highlighter.nudge()
+
+    def _wait_for_accessibility(self) -> None:
+        """Pasting works the moment Accessibility is granted, but reading other apps' windows (the
+        underline) stays blocked in a process that started untrusted. Under the login item we can
+        simply exit: launchd starts us again within seconds."""
+        from voicechat.permissions import accessibility
+
+        while not self.closing:
+            time.sleep(2.0)
+            if accessibility():
+                break
+        if self.closing:
+            return
+        if os.environ.get("VOICECHAT_LAUNCHD"):
+            self.ui.log("Accessibility granted. Restarting so the underline can read the page ...")
+            time.sleep(1.0)
+            os._exit(3)  # not a clean exit: KeepAlive brings us back
+        self.ui.log("Accessibility granted: pasting works now. Quit and start voicechat app again for the underline.")
 
     def _wait_for_input_monitoring(self) -> None:
         from voicechat.permissions import input_monitoring
@@ -758,8 +797,9 @@ class Session:
                 if cfg.earcon:
                     earcon("open")
                 self.recorder.start()
-            self._ui("dictating", "Dictating… ✓ when done, ✕ to discard")
+            self._ui("dictating", "Dictating… Enter or ✓ when done, Esc or ✕ to discard")
             self.ui.preview("")
+            self.ui.run_on_main(self._dict_keys_on)
             while outcome is None:
                 if self.closing or self.dict_cancel.is_set():
                     outcome = "cancel"
@@ -784,7 +824,7 @@ class Session:
                             text = self._transcribe16(audio[max(0, open_start - pad): min(len(audio), sample + pad)])
                             open_start = None
                             last_activity = now
-                            self._ui("dictating", "Dictating… ✓ when done, ✕ to discard")
+                            self._ui("dictating", "Dictating… Enter or ✓ when done, Esc or ✕ to discard")
                             if not text:
                                 continue
                             if is_cancel(text, cfg.cancel_words):
@@ -837,7 +877,7 @@ class Session:
             self.ui.log(f"  dictation done: {len(final)} chars" + (" → sending" if submit else " → pasted; press Enter to send"))
             if not self.paste:
                 return
-            if not self._deliver(final, submit):
+            if not self._deliver(final, submit, anywhere=True):  # you started this one: it goes where you are
                 end_state = "your_turn"
                 return
             end_state = "idle" if submit else "review"
@@ -845,6 +885,7 @@ class Session:
             self.ui.log(f"  dictation error: {type(exc).__name__}: {exc}")
             traceback.print_exc()
         finally:
+            self.ui.run_on_main(self._dict_keys_off)
             self._set_state("idle")
             self._ui(end_state, "Sent. Waiting for the reply…" if end_state == "idle" else "")
 
@@ -861,15 +902,16 @@ class Session:
 
     def _deliver(self, text: str, submit: bool, anywhere: bool = False) -> bool:
         """Paste `text` (and press Enter when `submit`) into the target app. `anywhere` skips the
-        allowed-targets check and remembers the target, for push-to-talk. False means the text
-        went to the clipboard instead, and the log says why."""
+        allowed-targets check and remembers the target: for push-to-talk and dictation, which you
+        started on purpose. Hands-free, where the mic opens by itself, keeps the check. False means
+        the text went to the clipboard instead, and the log says why."""
         from voicechat.front import give_focus_to
 
         bundle, name, pid, ours = self._paste_target()
         if not anywhere and not target_allowed(bundle, self.cfg.paste_targets, self.last_ptt_target):
             subprocess.run(["pbcopy"], input=text.encode())
             self.ui.log(f"  not pasted: {name or bundle} is in front. Copied to the clipboard instead; "
-                        f"hold the key once in your agent window to add it as a target.")
+                        f"dictate once into that window (tap or hold the key) to add it as a hands-free target.")
             return False
         if not self._can_paste(text or "send"):
             return False

@@ -30,6 +30,8 @@ PLAIN_KEYS = {
     "f17": 64, "f18": 79, "f19": 80, "f20": 90,
 }
 KEY_V, KEY_C, KEY_RETURN = 9, 8, 36
+KEY_ENTER_PAD, KEY_ESCAPE = 76, 53
+_COMBO_MODS = Quartz.kCGEventFlagMaskCommand | Quartz.kCGEventFlagMaskControl | Quartz.kCGEventFlagMaskAlternate
 
 
 def resolve_key(name: str) -> tuple[int, int | None]:
@@ -104,6 +106,54 @@ class Hotkey:
         except Exception as exc:  # never let an error escape into the event system
             print(f"hotkey error: {type(exc).__name__}: {exc}", flush=True)
         return event
+
+
+class DictationKeys:
+    """While a dictation session is open, Return accepts it (✓) and Escape discards it (✕), and
+    neither reaches the app in front. An active tap, so it can swallow those two keys; it is
+    installed when the session opens and removed when it ends, so no other keystroke ever passes
+    through us. `install` and `remove` must run on the main thread."""
+
+    def __init__(self, on_accept: Callable[[], None], on_cancel: Callable[[], None]):
+        self.on_accept = on_accept
+        self.on_cancel = on_cancel
+        self.tap = None
+        self.source = None
+
+    def install(self) -> bool:
+        self.tap = Quartz.CGEventTapCreate(Quartz.kCGSessionEventTap, Quartz.kCGHeadInsertEventTap,
+                                           Quartz.kCGEventTapOptionDefault, Quartz.CGEventMaskBit(Quartz.kCGEventKeyDown),
+                                           self._callback, None)
+        if self.tap is None:
+            return False  # Input Monitoring not granted: the pill's buttons and the key still work
+        self.source = Quartz.CFMachPortCreateRunLoopSource(None, self.tap, 0)
+        Quartz.CFRunLoopAddSource(Quartz.CFRunLoopGetMain(), self.source, Quartz.kCFRunLoopCommonModes)
+        Quartz.CGEventTapEnable(self.tap, True)
+        return True
+
+    def remove(self) -> None:
+        if self.tap is not None:
+            Quartz.CGEventTapEnable(self.tap, False)
+        if self.source is not None:
+            Quartz.CFRunLoopRemoveSource(Quartz.CFRunLoopGetMain(), self.source, Quartz.kCFRunLoopCommonModes)
+        self.tap = self.source = None
+
+    def _callback(self, proxy, etype, event, refcon):
+        try:
+            if etype in (Quartz.kCGEventTapDisabledByTimeout, Quartz.kCGEventTapDisabledByUserInput):
+                Quartz.CGEventTapEnable(self.tap, True)
+                return event
+            keycode = Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventKeycode)
+            if keycode not in (KEY_RETURN, KEY_ENTER_PAD, KEY_ESCAPE):
+                return event
+            if Quartz.CGEventGetFlags(event) & _COMBO_MODS:
+                return event  # Cmd/Ctrl/Option combinations are the app's business
+            if not Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventAutorepeat):
+                (self.on_cancel if keycode == KEY_ESCAPE else self.on_accept)()
+            return None  # swallowed: the app never sees this Return or Escape
+        except Exception as exc:
+            print(f"dictation keys error: {type(exc).__name__}: {exc}", flush=True)
+            return event
 
 
 def _post(keycode: int, down: bool, flags: int = 0) -> None:

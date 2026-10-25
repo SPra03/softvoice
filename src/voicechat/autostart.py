@@ -44,6 +44,7 @@ def plist(extra_args: list[str] | tuple[str, ...] = ()) -> dict:
         "EnvironmentVariables": {
             "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
             "PYTHONUNBUFFERED": "1",
+            "VOICECHAT_LAUNCHD": "1",  # lets the app know a crash-exit brings it back
         },
     }
 

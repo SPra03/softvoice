@@ -125,14 +125,19 @@ Talk as long as you like. Each time you pause for `dictation_pause_ms` (0.7 s) t
 preview; the sentence you are still saying is re-transcribed about once a second so you see it
 forming. Then:
 
-- **✓**, clicking the mic, or tapping the key pastes the whole text into your prompt at once
-- **✕** or saying "cancel" discards it
+- **Enter**, **✓**, clicking the mic, or tapping the key pastes the whole text into your prompt at once
+- **Escape**, **✕** or saying "cancel" discards it
 - ending with "send it" pastes and presses Enter
 - `dictation_silence_s` (8 s) of silence finishes it by itself
 
-The paste goes to the app in front. If that is voicechat itself (opening the pill's menu
-activates it, and macOS does not always hand activation back), it goes to the last other app that
-was in front, after giving it focus again.
+While the session is open, Enter and Escape are yours: they end the session and never reach the
+app in front (Cmd, Ctrl and Option combinations still do). The second Enter, after the paste,
+sends as usual.
+
+The paste goes to the app in front, whatever it is: you started this dictation, so that is where
+you want the words. If the front app is voicechat itself (opening the pill's menu activates it,
+and macOS does not always hand activation back), it goes to the last other app that was in front,
+after giving it focus again.
 
 The preview lives in the pill rather than in the prompt on purpose: live text keeps revising
 itself, and inside the pill we can rewrite it freely, while the prompt only gets one clean paste
@@ -151,7 +156,8 @@ registers the app as a macOS login item: it starts when you log in, needs no ter
 back by itself if it ever crashes (not after you quit it on purpose). `voicechat autostart off`
 removes the login item and stops the app; `voicechat autostart` shows the state. The app's output
 goes to `~/.voicechat/app.log`. Started this way, macOS attributes the permissions to the Python
-running voicechat instead of your terminal, so it asks for them once more the first time.
+running voicechat instead of your terminal, so it asks for them once more the first time. Once you
+grant Accessibility, the app restarts itself so the underline can read the page.
 
 Only one copy of the app runs at a time: `voicechat app` while it is already running just shows
 the pill of the running one. **Hide pill**, in the menu bar menu or the pill's own menu, tucks the
@@ -187,9 +193,10 @@ Say nothing for `listen_timeout_s` (10 s) and the mic closes. Say "cancel" or "n
 discard a take. Hold the push-to-talk key at any moment to interrupt the speaker and take over.
 If you typed a prompt yourself, or interrupted the speaker, the mic stays closed.
 
-The transcript is only pasted when the frontmost app is a terminal or agent app (`paste_targets`,
-a list of bundle-id patterns) or the app you last used push-to-talk in. Otherwise it goes to the
-clipboard and `listen` tells you.
+Hands-free opens the mic by itself, so it is careful where it pastes: only when the frontmost app
+is a terminal or agent app (`paste_targets`, a list of bundle-id patterns) or the app you last
+dictated into with the key or the mic. Otherwise the text goes to the clipboard and the log tells
+you.
 
 ## Configuration
 
@@ -224,7 +231,7 @@ all commented out; remove the `# ` from a line to change it. Restart the daemon 
 | `listen_timeout_s` | `10` | close the mic when you say nothing |
 | `earcon` | `true` | beeps when the mic opens and closes |
 | `cancel_words` | `["cancel", ...]` | say one of these to discard a take |
-| `paste_targets` | terminals, Claude, VS Code, Cursor, JetBrains, Codex | bundle ids hands-free may paste into |
+| `paste_targets` | terminals, Claude, VS Code, Cursor, JetBrains, Codex | bundle ids hands-free may paste into (dictation you start yourself pastes anywhere) |
 
 Set `VOICECHAT_DISABLED=1` in an agent's environment to silence it without uninstalling.
 

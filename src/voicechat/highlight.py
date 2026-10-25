@@ -40,6 +40,18 @@ def _attr(AS, element, name):
     return value if err == 0 else None
 
 
+AX_ERRORS = {-25211: "accessibility API disabled: this process is not trusted under Privacy & Security > Accessibility",
+             -25204: "the app does not answer accessibility requests", -25205: "attribute unsupported",
+             -25202: "invalid element", -25212: "no value", -25200: "accessibility failure"}
+
+
+def trusted() -> bool | None:
+    try:
+        return bool(_ax().AXIsProcessTrusted())
+    except Exception:
+        return None
+
+
 def _front_pid() -> int | None:
     try:
         from AppKit import NSWorkspace
@@ -66,6 +78,8 @@ class Snapshot:
     segments: list[tuple[object, str, int]] = field(default_factory=list)  # (node, text, offset)
     joined: str = ""
     taken_at: float = 0.0
+    problem: str = ""  # why there is nothing to underline, for the log
+    nodes: int = 0
 
     @property
     def joined_lower(self) -> str:
@@ -95,6 +109,8 @@ def snapshot_window(pid: int) -> Snapshot:
         window = _pick_window(AS, app)
     snap = Snapshot(window=window, taken_at=time.monotonic())
     if window is None:
+        err, _ = AS.AXUIElementCopyAttributeValue(app, "AXWindows", None)
+        snap.problem = f"no window readable ({AX_ERRORS.get(err, f'accessibility error {err}')})"
         return snap
     snap.frame = element_frame(window)
     stack = [(window, 0)]  # depth-first, children in order: reading order
@@ -121,6 +137,9 @@ def snapshot_window(pid: int) -> Snapshot:
         parts.append(text)
         offset += len(text) + 1  # one space between pieces
     snap.joined = " ".join(parts)
+    snap.nodes = seen
+    if not snap.joined:
+        snap.problem = f"the window exposes no text through accessibility ({seen} elements seen)"
     return snap
 
 
@@ -274,10 +293,11 @@ def rects_for_sentence(sentence: str, snap: Snapshot) -> list[tuple]:
 
 
 class Highlighter:
-    def __init__(self, run_on_main, color: tuple[float, float, float] = (0.67, 0.67, 0.67), other_pid=None):
+    def __init__(self, run_on_main, color: tuple[float, float, float] = (0.67, 0.67, 0.67), other_pid=None, log=None):
         self.color = color  # the underline's colour, (r, g, b) in 0..1
         self.other_pid = other_pid  # callable -> pid of the last front app that is not us (the session tracks it)
         self.run_on_main = run_on_main
+        self.log = log or (lambda msg: None)  # one line per reply when there is nothing to underline, and why
         self.overlays: list = []
         self.lock = threading.Lock()
         self.pid: int | None = None
@@ -300,6 +320,10 @@ class Highlighter:
         self.pid = self.last_other_pid  # never read our own pill; it carries the same sentence
         with self.lock:
             self.snap = None
+        if not self.pid:
+            self.log("underline: no front app to read")
+        elif trusted() is False:
+            self.log("underline: Accessibility is not granted to this process (Privacy & Security > Accessibility)")
         threading.Thread(target=self._collect, args=(self.generation,), daemon=True).start()
 
     def _collect(self, gen: int) -> Snapshot | None:
@@ -307,8 +331,11 @@ class Highlighter:
         try:
             if self.pid:
                 snap = snapshot_window(self.pid)
-        except Exception:
+                if snap.problem and gen == self.generation:
+                    self.log(f"underline: {snap.problem} (pid {self.pid})")
+        except Exception as exc:
             snap = Snapshot()
+            self.log(f"underline: could not read the front window: {type(exc).__name__}: {exc}")
         with self.lock:
             if gen == self.generation:
                 self.snap = snap
