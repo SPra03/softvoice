@@ -3,6 +3,9 @@
 All MLX work happens on one dedicated thread. MLX streams belong to the thread that created
 them, so calling the model from another thread fails with
 "There is no Stream(cpu, 1) in current thread". Callers just use `transcribe()`.
+
+After every call the MLX buffer cache is handed back to the OS, so the process stays near the size of
+the weights (about 1.5 GB) instead of growing with each take.
 """
 
 from __future__ import annotations
@@ -16,6 +19,19 @@ from pathlib import Path
 import numpy as np
 
 log = logging.getLogger("softvoice.stt")
+
+
+def _release_cache() -> None:
+    """Hand the MLX buffer cache back to the OS.
+
+    MLX keeps every buffer it frees in a cache keyed by size, and each take has a new length, so the cache
+    only grows: 3.8 GB after one 18 s dictation, 11 GB after a morning. A buffer written by the GPU is freed
+    once that work retires, so wait for it first or the tail of the call is missed. Together the two calls
+    take a few milliseconds, and the next take is no slower."""
+    import mlx.core as mx
+
+    mx.synchronize()
+    mx.clear_cache()
 
 
 class Transcriber:
@@ -35,16 +51,18 @@ class Transcriber:
 
     def _serve(self, warm_up: bool) -> None:
         try:
+            import mlx.core as mx
             from parakeet_mlx import from_pretrained
 
             t0 = time.monotonic()
             self.model = from_pretrained(self.model_id)
             self.sample_rate = self.model.preprocessor_config.sample_rate
             load = time.monotonic() - t0
-            if warm_up:  # first MLX call compiles kernels; do it now, not on the first keypress
+            if warm_up:  # first MLX call loads the weights and compiles kernels; do it now, not on the first keypress
                 self._transcribe(np.zeros(self.sample_rate, dtype=np.float32), self.sample_rate)
-            log.info("Parakeet ready: %s, %d Hz, load %.1fs, warm-up %.1fs", self.model_id, self.sample_rate, load,
-                     time.monotonic() - t0 - load)
+                _release_cache()
+            log.info("Parakeet ready: %s, %d Hz, load %.1fs, warm-up %.1fs, %.2f GB of GPU memory", self.model_id,
+                     self.sample_rate, load, time.monotonic() - t0 - load, mx.get_active_memory() / 2**30)
         except Exception as exc:
             self._error = exc
             self._ready.set()
@@ -56,6 +74,7 @@ class Transcriber:
                 job["result"] = self._transcribe(audio, sample_rate)
             except Exception as exc:
                 job["error"] = exc
+            _release_cache()
             job["done"].set()
 
     def _transcribe(self, audio: np.ndarray, sample_rate: int) -> str:
