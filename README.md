@@ -134,37 +134,79 @@ and `~/.cache/huggingface/hub/models--mlx-community--parakeet-tdt-0.6b-v3` to ge
 
 ## Everyday use
 
+The pill has two buttons. The **mic** on the left is you talking to the agent; the **speaker** on
+the right is the agent talking to you. Exactly one thing on the pill is coral at any time, and it
+is the thing to tap next. Most of the time you will not touch the pill at all: replies read
+themselves, and the **talk key** does the rest.
+
 The talk key is **right Option** by default: the ⌥ key to the right of the space bar, chosen
 because nothing else uses it on its own. Prefer a combination? One line in the config:
 `hotkey = "alt+space"` (or `ctrl+shift+d`, `fn+space`, ...). A combination is swallowed, so the
 app in front never sees it.
 
-| when | you | softvoice |
-| --- | --- | --- |
-| any time | **tap** the talk key, or click the mic | opens a dictation session: talk as long as you like, your words appear in the pill |
-| dictating | tap again, press **Enter**, or click **✓** | pastes everything into your prompt, where you can still edit it |
-| dictating | press **Escape**, click **✕**, or say "cancel" | discards it |
-| dictating | end with "send it" | pastes and presses Enter for you |
-| any time | **hold** the talk key, speak, release | push-to-talk: a quick take, pasted where your cursor is |
-| while it speaks | tap the talk key, or click the speaker | stops the voice |
-| while it is quiet | click the speaker | reads the text you have selected in any app, or replays the last reply |
-| hands-free on | just talk after the beep | after every spoken reply the mic opens by itself, pauses send |
+### The mic: talking to your agent
+
+There are three ways to talk. All of them end the same way: what you said is transcribed on your
+Mac and pasted into the prompt where your cursor is, ready for you to read, edit and send.
+
+#### Dictate: tap the key, or click the mic
+
+For anything longer than a sentence. The pill grows to the left into **waveform · live text ·
+✕ · ✓** and you talk for as long as you like. Your words appear in the pill as you go: sentences
+you have finished are white, the one still forming is grey, and the line slides so the newest
+words stay in view. Each pause of `dictation_pause_ms` (0.7 s) commits a sentence; the one you are
+still saying is re-transcribed about once a second so you can watch it form.
+
+- **Done talking**: press **Enter**, tap the key again, or click **✓**. Everything is pasted into
+  your prompt in one piece. Read it, fix a word if you need to, and press Enter again to send.
+- **Send without touching the keyboard**: end with "send it" (`send_words`), and it pastes and
+  presses Enter for you. **Auto-send** in the menu does that every time.
+- **Changed your mind**: press **Escape**, click **✕**, or say "cancel" or "never mind"
+  (`cancel_words`). Nothing is pasted.
+- **Walked away**: after `dictation_silence_s` (8 s) of silence the session finishes by itself.
 
 Enter and Escape are only taken while a dictation session is open, and only on their own: Cmd,
-Ctrl and Option combinations still reach your app. The second Enter, after the paste, sends your
-prompt as usual.
+Ctrl and Option combinations still reach your app. The preview lives in the pill rather than in
+the prompt on purpose: live text keeps revising itself, and the prompt gets one clean paste.
 
-### What is on device, and what is not
+#### Push-to-talk: hold the key, speak, let go
 
-- **Audio** is recorded, transcribed and synthesised on your Mac. It is never written to disk and never sent anywhere.
-- **The agent's replies** are read from the hook payload on your Mac and spoken locally. Anything that looks like a key or token is replaced with the word "redacted" before it is spoken; code blocks, tables and URLs are skipped.
-- **The network** is used once, to download the models from Hugging Face. After that you can work offline.
-- **Nothing is collected**: no analytics, no accounts, no telemetry.
+For a quick one-liner. Hold the key, say it, release: the take is transcribed and pasted where
+your cursor is, without a session, a preview or any buttons. Presses shorter than
+`tap_threshold_ms` (350 ms) count as a tap, longer ones as a hold.
 
-## Hearing replies
+#### Hands-free: a conversation
 
-Nothing else to run. When an agent finishes a turn, its Stop hook calls `softvoice hook`, which
-hands the reply to a small daemon (started on demand, kept warm) that cleans and speaks it:
+Turn it on in the menu, with `softvoice app --hands-free`, or with `hands_free = true`. Each time
+the agent finishes speaking a reply, the mic opens by itself:
+
+1. a short high beep: the mic is open
+2. you talk; Silero VAD waits until you pause for `end_silence_ms` (0.9 s)
+3. a short low beep: the mic is closed and Parakeet transcribes
+4. the text is pasted into the agent's prompt, where you can read and edit it, then you press Enter
+
+"Send it" and **Auto-send** (`auto_submit = true`) work here too, so a whole exchange can go by
+without your hands leaving the coffee. Say nothing for `listen_timeout_s` (10 s) and the mic
+closes. "Cancel" discards a take. Hold the talk key at any moment to interrupt the speaker and take
+over. If you typed a prompt yourself, or interrupted the speaker, the mic stays closed.
+
+#### Where your words go
+
+Dictation and push-to-talk paste into whatever app is in front, because you started them on
+purpose: the Claude Code prompt in a terminal, the desktop app, a text field anywhere. Hands-free,
+where the mic opens by itself, is more careful: it pastes only into terminals and agent apps
+(`paste_targets`) or an app you have dictated into before, and otherwise puts the text on the
+clipboard and tells you.
+
+Without the pill, from a terminal: `softvoice listen` (hold the key, speak, release) and
+`softvoice listen --hands-free`. `--auto-submit` presses Enter for you; `--no-paste` only prints.
+
+### The speaker: hearing your agent
+
+#### Replies read themselves
+
+Nothing to press. When an agent finishes a turn, its Stop hook calls `softvoice hook`, which hands
+the reply to a small daemon (started on demand, kept warm) that cleans it up and speaks it:
 
 - the whole turn is spoken, not just the last paragraph: every text block of at least
   `interim_min_chars` (200) since your message, so a long answer written before a tool call is not
@@ -172,8 +214,35 @@ hands the reply to a small daemon (started on demand, kept warm) that cleans and
 - code blocks, tables, URLs and long paths are dropped or shortened: look at the screen for those
 - markdown is flattened; bullets become sentences so the voice pauses
 - anything that looks like a key or token is replaced with "redacted"
-- the whole reply is spoken, however long; set `max_chars` to cut long replies at a sentence boundary with "More on screen."
-- permission prompts are spoken too; sending a new prompt interrupts speech
+- the whole reply is spoken, however long; set `max_chars` to cut long replies at a sentence
+  boundary with "More on screen."
+- permission prompts are spoken too, so you hear when the agent is waiting for you
+
+#### While it speaks
+
+- **Stop it**: tap the talk key, or click the speaker (the coral stop button). Sending a new
+  prompt stops it as well.
+- **Follow along in the pill**: it shows the sentence being spoken on one line. The words already
+  said and the current one are white, the rest grey, and long sentences slide left so the current
+  word stays in view. The daemon speaks one sentence at a time and learns its own speaking rate,
+  so the timing stays close.
+- **Follow along on the page**: a thin light grey underline is drawn under that sentence in the
+  front window, line by line, found through macOS accessibility. It works where the app exposes
+  its text: the Claude desktop app, Terminal, VS Code and most native apps. The underline follows
+  the page: every scroll event makes it re-read its position at once, and a slow safety read twice
+  a second covers keyboard scrolling and scrollbar drags. When there is nothing to underline, the
+  app log says why. Turn it off with the pill's menu or `highlight_on_page = false`.
+
+#### While it is quiet
+
+- **Hear it again**: click the speaker and the last reply is read once more.
+- **Read anything**: select text in any app, click the speaker, and it reads the selection.
+- **Mute**: in the pill's menu, the menu bar, or `softvoice mute`. The speaker icon is slashed
+  while muted; `softvoice unmute` or the same menu brings the voice back.
+- **Change the voice**: `softvoice voice jane` picks one of the predefined voices
+  (`softvoice voices` lists them), or point `voice` in the config at a short WAV of your own.
+
+From a terminal:
 
 ```bash
 softvoice say "hello there"      # speak anything
@@ -183,59 +252,15 @@ softvoice voice jane             # try another voice (see `softvoice voices`)
 softvoice status | log | restart
 ```
 
-### Following along
-
-While a reply is read, the pill shows the sentence being spoken on one line: the words already
-said and the current one are white, the rest grey, and long sentences slide left so the current
-word stays in view. The daemon speaks one sentence at a time and learns its own speaking rate, so
-the timing stays close.
-
-On the page itself, a thin light grey underline is drawn under that sentence in the front window,
-line by line, found through macOS accessibility. It works where the app exposes its text: the
-Claude desktop app, Terminal, VS Code and most native apps. The underline follows the page: every
-scroll event makes it re-read its position at once, and a slow safety read twice a second covers
-keyboard scrolling and scrollbar drags. When there is nothing to underline, the app log says why.
-Turn it off with the pill's menu or `highlight_on_page = false`.
-
-## Talking
-
-The transcript is pasted wherever your cursor is: the Claude Code prompt in a terminal, the
-desktop app, anything. Dictation and push-to-talk paste into whatever app is in front, since you
-started them on purpose. Hands-free, where the mic opens by itself, is more careful: it pastes
-only into terminals and agent apps (`paste_targets`) or an app you have dictated into before, and
-otherwise puts the text on the clipboard and tells you.
-
-Without the pill, from a terminal: `softvoice listen` (hold the key, speak, release) and
-`softvoice listen --hands-free`. `--auto-submit` presses Enter for you; `--no-paste` only prints.
-
-## The pill and the menu bar
-
-```bash
-softvoice app --hands-free    # by hand; `softvoice autostart on` does this at every login
-```
+### The pill and the menu bar
 
 A small dark glass pill (36 points tall) floats above every window, bottom right by default.
 Drag it anywhere; it remembers the spot. Clicking it never steals focus, so your cursor stays in
-the prompt. It uses one accent colour, and the accent always means "live": the waveform while the
-mic listens, the speaker while the voice talks. Everything else is grey. Whenever text shows, the
-capsule becomes a rounded rectangle, and the text is a single line that scrolls, newest words at
-the right.
-
-| button | click | shows |
-| --- | --- | --- |
-| mic | start a dictation session | coral at rest (talk is the next thing to do), a live coral waveform while it listens, grey while the voice speaks or it transcribes |
-| speaker | stop the voice while it speaks; when quiet, read the text you have selected in the front app, or replay the last reply if nothing is selected | coral stop while speaking, grey play otherwise, slashed when muted |
-
-Exactly one thing on the pill is coral at any time, and it is the thing to tap next.
-
-**Dictation session**: click the mic (or tap the key) and the pill grows to the left into
-**waveform · live text · ✕ · ✓**. Committed sentences are white; the sentence still forming, and
-the hint text, are grey; the line scrolls so the newest words are always visible. Each time you
-pause for `dictation_pause_ms` (0.7 s) the sentence is committed; the one you are still saying is
-re-transcribed about once a second so you see it forming. `dictation_silence_s` (8 s) of silence
-finishes the session by itself. The preview lives in the pill rather than in the prompt on
-purpose: live text keeps revising itself, and the prompt only gets one clean paste that you can
-edit before sending.
+the prompt. It uses one accent colour, and the accent always means "live": the mic is coral at
+rest (talking is the next thing to do) and becomes a live coral waveform while it listens; the
+speaker is a coral stop button while the voice talks and a grey play button when it is quiet,
+slashed when muted. Whenever text shows, the capsule becomes a rounded rectangle, and the text is
+a single line that scrolls, newest words at the right.
 
 **Press and hold** either button, or right-click, for the options: Hands-free, Auto-send, Mute,
 Underline, Voice, Hide pill, config file, Quit. `panel = false` in the config turns the pill off.
@@ -247,33 +272,25 @@ menu has **Hide pill** / **Show pill**, **Talk**, **Stop speaking**, **Mute**, *
 
 <p align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/menu-bar.png" width="234" alt="The menu bar menu: a status line, Talk, Stop speaking, Mute, Hands-free, Auto-send, Hide pill, Open config file, Quit softvoice"></p>
 
-### Running without a terminal
+#### Running without a terminal
 
 `softvoice autostart on` registers the app as a macOS login item: it starts when you log in, needs
 no terminal, and comes back by itself if it ever crashes (not after you quit it on purpose).
 `softvoice autostart off` removes the login item and stops the app; `softvoice autostart` shows
-the state. The app's output goes to `~/.softvoice/app.log`.
+the state. The app's output goes to `~/.softvoice/app.log`. By hand, `softvoice app --hands-free`
+starts the same app from a terminal.
 
 Only one copy of the app runs at a time: `softvoice app` while it is already running just shows
 the pill of the running one. **Hide pill** tucks the pill away while the key, the voice and the
 menu bar keep working; **Show pill** brings it back. Quit from the menu stops the app until the
 next login or the next `softvoice app`.
 
-## Hands-free
+## What is on device, and what is not
 
-A conversation loop, on with `--hands-free`, the menu, or `hands_free = true`. Each time the
-daemon finishes speaking a reply:
-
-1. a short high beep: the mic is open
-2. you talk; Silero VAD waits until you pause for `end_silence_ms` (0.9 s)
-3. a short low beep: the mic is closed; Parakeet transcribes
-4. the text is pasted into the agent's prompt, where you can read and edit it, then you press Enter
-
-To send without touching the keyboard, end what you say with "send it" (`send_words`), or turn
-on **Auto-send** (`auto_submit = true`), which presses Enter for you. Say nothing for
-`listen_timeout_s` (10 s) and the mic closes. Say "cancel" or "never mind" to discard a take.
-Hold the talk key at any moment to interrupt the speaker and take over. If you typed a prompt
-yourself, or interrupted the speaker, the mic stays closed.
+- **Audio** is recorded, transcribed and synthesised on your Mac. It is never written to disk and never sent anywhere.
+- **The agent's replies** are read from the hook payload on your Mac and spoken locally. Anything that looks like a key or token is replaced with the word "redacted" before it is spoken; code blocks, tables and URLs are skipped.
+- **The network** is used once, to download the models from Hugging Face. After that you can work offline.
+- **Nothing is collected**: no analytics, no accounts, no telemetry.
 
 ## Configuration
 
