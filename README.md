@@ -233,6 +233,9 @@ are spoken too, so you hear when the agent is waiting for you.
   the page. Off with the pill's menu or `highlight_on_page = false`.
 - **Hear it again**: click the speaker.
 - **Read anything**: select text in any app and click the speaker.
+- **Chats without hooks**: the Claude app's own chat and ChatGPT never say when a reply ends.
+  Tick them under **Read replies from** in the menu and each new reply is read aloud a couple of
+  seconds after it finishes, while that app is in front. Your own prompts are never read.
 - **Mute**: the pill's menu, the menu bar, or `softvoice mute`.
 - **Change the voice**: `softvoice voice jane` (`softvoice voices` lists them), or point `voice`
   in the config at a short WAV of your own.
@@ -258,12 +261,13 @@ slashed when muted. Whenever text shows, the capsule becomes a rounded rectangle
 a single line that scrolls, newest words at the right.
 
 **Press and hold** either button, or right-click, for the options: Hands-free, Auto-send, Mute,
-Underline, Voice, Hide pill, config file, Quit. `panel = false` in the config turns the pill off.
+Underline, Read replies from, Voice, Hide pill, config file, Quit. `panel = false` in the config
+turns the pill off.
 
 The menu bar gets one small waveform, the same in every state (the pill is where state shows);
 `menu_bar_icon = false` hides it. Its first line says what softvoice is doing right now, and the
-menu has **Hide pill** / **Show pill**, **Talk**, **Stop speaking**, **Mute**, **Hands-free** and
-**Auto-send**, the config file, and Quit.
+menu has **Hide pill** / **Show pill**, **Talk**, **Stop speaking**, **Mute**, **Hands-free**,
+**Auto-send** and **Read replies from**, the config file, and Quit.
 
 <p align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/menu-bar.png" width="234" alt="The menu bar menu: a status line, Talk, Stop speaking, Mute, Hands-free, Auto-send, Hide pill, Open config file, Quit softvoice"></p>
 
@@ -314,6 +318,8 @@ all commented out; remove the `# ` from a line to change it. Restart the daemon 
 | `earcon` | `true` | beeps when the mic opens and closes |
 | `cancel_words` | `["cancel", ...]` | say one of these to discard a take |
 | `paste_targets` | terminals, Claude, VS Code, Cursor, JetBrains, Codex | bundle ids hands-free may paste into (dictation you start yourself pastes anywhere) |
+| `watch_chats` | `false` | read aloud new replies in chat apps that have no hooks, while the app is in front; the **Read replies from** switch in the menus |
+| `watch_apps` | `[]` | which of those apps: `com.anthropic.claudefordesktop` (the Claude app's chat; its Code tab keeps using the hook) and `com.openai.chat` (ChatGPT) |
 
 Set `SOFTVOICE_DISABLED=1` in an agent's environment to silence it without uninstalling.
 

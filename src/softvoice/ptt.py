@@ -26,7 +26,7 @@ import traceback
 
 import numpy as np
 
-from softvoice.config import Config, accent_rgb
+from softvoice.config import CHAT_APPS, Config, accent_rgb, save_setting
 
 RECORD_RATE = 16000
 
@@ -274,6 +274,9 @@ class Session:
         self.dict_keys = None  # Return/Escape tap, alive only while a dictation session is open
         self.highlighter = None
         self.highlight_enabled = cfg.highlight_on_page
+        self.watcher = None  # ChatWatcher: reads replies in chat apps without hooks, when switched on
+        self.watch_chats = cfg.watch_chats
+        self.watch_apps = [b for _, b in CHAT_APPS if b in cfg.watch_apps] + [b for b in cfg.watch_apps if b not in dict(CHAT_APPS).values()]
         self.transcriber = None
         self.recorder: Recorder | None = None
         self.detector = None
@@ -325,6 +328,14 @@ class Session:
                                                log=self.ui.log)
             except Exception as exc:
                 self.ui.log(f"on-page highlight unavailable: {exc}")
+        try:
+            from softvoice.watch import ChatWatcher
+
+            self.watcher = ChatWatcher(speak=self._speak_watched, front=self._watch_front, busy=lambda: self.speaking,
+                                       log=self.ui.log, apps=self.watch_apps)
+            self.watcher.set_enabled(self.watch_chats and bool(self.watch_apps))
+        except Exception as exc:
+            self.ui.log(f"chat watcher unavailable: {exc}")
         threading.Thread(target=self._event_loop, name="events", daemon=True).start()
         self._ui("idle")
 
@@ -350,6 +361,8 @@ class Session:
         if self.hotkey_tap is not None:
             self.ui.run_on_main(self.hotkey_tap.remove)
         self.ui.run_on_main(self._dict_keys_off)
+        if self.watcher is not None:
+            self.watcher.set_enabled(False)
         if self.recorder:
             self.recorder.close()
 
@@ -480,6 +493,58 @@ class Session:
         self.auto_submit = on
         self.ui.log("auto-send on: takes are sent as soon as they are pasted" if on
                     else "auto-send off: takes wait in your prompt until you press Enter, or end with \"send it\"")
+
+    # -- replies from chat apps without hooks (the "Read replies from" menu) --
+
+    def set_watch_chats(self, on: bool) -> None:
+        """The master switch: read aloud new replies in the ticked chat apps while they are in front."""
+        self.watch_chats = on
+        self._save_setting("watch_chats", on)
+        self._apply_watch()
+
+    def set_watch_app(self, bundle: str, on: bool) -> None:
+        """Tick or untick one app under "Read replies from"."""
+        apps = [b for b in self.watch_apps if b != bundle] + ([bundle] if on else [])
+        known = [b for _, b in CHAT_APPS]
+        self.watch_apps = [b for b in known if b in apps] + [b for b in apps if b not in known]
+        self._save_setting("watch_apps", self.watch_apps)
+        self._apply_watch()
+
+    def _apply_watch(self) -> None:
+        if self.watcher is not None:
+            self.watcher.set_apps(self.watch_apps)
+            self.watcher.set_enabled(self.watch_chats and bool(self.watch_apps))
+        if self.watch_chats and not self.watch_apps:
+            self.ui.log("reading replies from chat apps: on, but no app is ticked under \"Read replies from\"")
+        changed = getattr(self.ui, "watch_changed", None)
+        if changed is not None:
+            changed(self.watch_chats, list(self.watch_apps))
+
+    def _save_setting(self, name: str, value) -> None:
+        try:
+            save_setting(name, value)
+        except Exception as exc:
+            self.ui.log(f"could not save {name} to the config file: {exc}")
+
+    def _watch_front(self) -> tuple[int | None, str | None]:
+        """(pid, bundle) of the app you are looking at; when our own pill is in front, the app before it."""
+        from softvoice.front import front_pid
+
+        pid = front_pid()
+        if pid is not None and pid == os.getpid() and self.front is not None:
+            return self.front.pid, self.front.bundle
+        bundle, _name = frontmost_app()
+        return pid, bundle
+
+    def _speak_watched(self, text: str, bundle: str) -> None:
+        from softvoice.client import send
+        from softvoice.watch import app_name
+
+        try:
+            send({"cmd": "speak", "text": text,
+                  "meta": {"event": "watch", "session_id": f"watch:{bundle}", "project": app_name(bundle)}})
+        except Exception as exc:
+            self.ui.log(f"could not reach the speaker daemon: {exc}")
 
     # -- internals --
 
@@ -648,7 +713,7 @@ class Session:
                 if self.state == "idle":
                     self._ui("idle")
                 return
-            if ev.get("source") == "Stop" or self.resume_after:
+            if ev.get("source") in ("Stop", "watch") or self.resume_after:  # a reply ended: your turn
                 self.resume_after = False
                 if self.hands_free and not self.muted:
                     self._start_auto()
@@ -920,6 +985,8 @@ class Session:
             return False
         if anywhere:
             self.last_ptt_target = bundle
+        if text and self.watcher is not None:
+            self.watcher.note_user_text(text)  # your words, never read back as a reply
         paste_text(text, submit, self.cfg.paste_delay_ms if text else 0)
         return True
 

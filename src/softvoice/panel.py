@@ -60,7 +60,7 @@ from Quartz import (
     kCGBlendModeDestinationOut,
 )
 
-from softvoice.config import HOME_DIR, accent_rgb, write_default_config
+from softvoice.config import CHAT_APPS, HOME_DIR, accent_rgb, write_default_config
 
 POS_PATH = HOME_DIR / "panel.json"
 BTN = 34  # a button's hit area
@@ -329,6 +329,13 @@ class MenuActions(NSObject):
     def toggleHighlight_(self, sender):
         self.panel.session.set_highlight(not self.panel.session.highlight_enabled)
 
+    def toggleWatchChats_(self, sender):
+        self.panel.session.set_watch_chats(not self.panel.session.watch_chats)
+
+    def toggleWatchApp_(self, sender):
+        bundle = str(sender.representedObject())
+        self.panel.session.set_watch_app(bundle, bundle not in self.panel.session.watch_apps)
+
     def tick_(self, timer):
         self.panel._tick()
 
@@ -590,6 +597,23 @@ class Panel:
         add("Auto-send: press Enter for me", b"toggleAutoSend:", s.auto_submit)
         add("Mute the voice", b"toggleMute:", s.muted)
         add("Underline the sentence on the page", b"toggleHighlight:", s.highlight_enabled)
+        # Chat apps without hooks: a master switch and one tick per known app
+        watch = NSMenu.alloc().init()
+        watch.setAutoenablesItems_(False)
+        master = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Read chat replies aloud", b"toggleWatchChats:", "")
+        master.setTarget_(self.actions)
+        master.setState_(1 if s.watch_chats else 0)
+        watch.addItem_(master)
+        watch.addItem_(NSMenuItem.separatorItem())
+        for name, bundle in CHAT_APPS:
+            item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(name, b"toggleWatchApp:", "")
+            item.setTarget_(self.actions)
+            item.setRepresentedObject_(bundle)
+            item.setState_(1 if bundle in s.watch_apps else 0)
+            watch.addItem_(item)
+        watch_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Read replies from", None, "")
+        watch_item.setSubmenu_(watch)
+        menu.addItem_(watch_item)
         menu.addItem_(NSMenuItem.separatorItem())
         voices = NSMenu.alloc().init()
         for name in PREDEFINED_VOICES:
