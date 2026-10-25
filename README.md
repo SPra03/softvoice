@@ -13,7 +13,7 @@
 
 <p align="center"><sub>45 seconds, no cuts: a prompt dictated into Claude Code, sent with Enter, and the reply read aloud while the pill and a thin underline follow along.</sub></p>
 
-An open-source, offline tool to Converse with your coding agent. Tired of reading claude/codex
+An **open-source**, **offline** tool to Converse with your coding agent. Tired of reading claude/codex
 outputs all day long, I made this tool to listen instead. It's just like having a conversation,
 without spending a dime. Drag the pill anywhere to place and use it across apps.
 
@@ -28,7 +28,7 @@ Apple Silicon Mac, macOS 14 or newer. MIT licence. Early, and in daily use by it
 
 Two things, both on device.
 
-### Dictation: you talk, your agent gets text
+### Dictation: you talk → your agent listens
 
 - **Click the mic or press the talk key.** Option+Space, or any key you choose. Speak for as
   long as you like.
@@ -37,7 +37,7 @@ Two things, both on device.
 - **Enter pastes, Escape discards.** The text goes into whatever has focus: Claude Code, Codex,
   or any other app.
 
-### Speech: your agent talks, you listen
+### Speech: your agent reads → you listen
 
 - **Replies read themselves.** When Claude Code or Codex finishes a turn, the reply is spoken.
   The pill shows the sentence being read and a thin underline follows it in the terminal.
