@@ -5,6 +5,7 @@
 ![macOS Apple Silicon](https://img.shields.io/badge/macOS%2014%2B-Apple%20Silicon-black?logo=apple)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
+[![PyPI](https://img.shields.io/pypi/v/voicechat-mac?color=blue)](https://pypi.org/project/voicechat-mac/)
 ![On-device](https://img.shields.io/badge/your%20voice%20%26%20text-never%20leave%20your%20Mac-blue)
 [![CI](https://github.com/SPra03/voicechat/actions/workflows/ci.yml/badge.svg)](https://github.com/SPra03/voicechat/actions/workflows/ci.yml)
 
@@ -25,9 +26,11 @@ Three commands, with [uv](https://docs.astral.sh/uv/) doing the Python work:
 
 ```bash
 brew install uv
-uv tool install git+https://github.com/SPra03/voicechat
+uv tool install voicechat-mac
 voicechat setup
 ```
+
+(Or the newest commit straight from GitHub: `uv tool install git+https://github.com/SPra03/voicechat`.)
 
 `setup` downloads the two models once (Pocket TTS, about 230 MB; Parakeet, 2.5 GB) and asks
 macOS for the permissions below. Then:
@@ -40,7 +43,7 @@ voicechat autostart on     # the pill, now and at every login, with no terminal 
 `install` writes three hooks into `~/.claude/settings.json` (a backup is kept next to it) and,
 if `~/.codex` exists, into `~/.codex/hooks.json`. Restart your Claude Code sessions so they pick
 the hooks up; Codex needs a one-time `/hooks` to trust them. Upgrade later with
-`uv tool upgrade voicechat`; `voicechat uninstall` removes the hooks, `voicechat autostart off`
+`uv tool upgrade voicechat-mac`; `voicechat uninstall` removes the hooks, `voicechat autostart off`
 the login item, and everything voicechat owns lives in `~/.voicechat`.
 
 Needs about 4 GB of disk for the models and the Python environment, and about 2 GB of memory

@@ -1,5 +1,5 @@
 [project]
-name = "voicechat"
+name = "voicechat-mac"
 version = "0.1.0"
 description = "On-device voice in and out for Claude Code and Codex: replies read aloud, push-to-talk and dictation, nothing leaves your Mac"
 readme = "README.md"
@@ -41,6 +41,9 @@ voicechat = "voicechat.cli:main"
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "voicechat"  # the import and command stay `voicechat`; only the PyPI name carries -mac
 
 [dependency-groups]
 dev = [
