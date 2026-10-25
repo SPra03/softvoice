@@ -27,8 +27,9 @@ macOS for the permissions below. `install` writes three hooks into `~/.claude/se
 backup is kept next to it) and, if `~/.codex` exists, into `~/.codex/hooks.json`. Restart your
 Claude Code sessions so they pick the hooks up. Codex needs a one-time `/hooks` to trust them.
 
-Then `voicechat app --hands-free` starts the floating pill. Add it to your login items if you
-want it always there.
+Then `voicechat autostart on` starts the floating pill now and at every login, with no terminal
+left open; or run `voicechat app --hands-free` by hand. Hands-free at login: `autostart on
+--hands-free`, or `hands_free = true` in the config.
 
 ### Permissions
 
@@ -138,11 +139,28 @@ itself, and inside the pill we can rewrite it freely, while the prompt only gets
 that you can edit before sending.
 
 **Press and hold** either button, or right-click, for the options: Hands-free, Auto-send,
-Mute, Voice, config file, Quit. `panel = false` in the config turns the pill off.
+Mute, Voice, Hide pill, config file, Quit. `panel = false` in the config turns the pill off.
+
+### Running without a terminal
+
+```bash
+voicechat autostart on
+```
+
+registers the app as a macOS login item: it starts when you log in, needs no terminal, and comes
+back by itself if it ever crashes (not after you quit it on purpose). `voicechat autostart off`
+removes the login item and stops the app; `voicechat autostart` shows the state. The app's output
+goes to `~/.voicechat/app.log`. Started this way, macOS attributes the permissions to the Python
+running voicechat instead of your terminal, so it asks for them once more the first time.
+
+Only one copy of the app runs at a time: `voicechat app` while it is already running just shows
+the pill of the running one. **Hide pill**, in the menu bar menu or the pill's own menu, tucks the
+pill away while the key, the voice and the menu bar keep working; **Show pill** brings it back.
+Quit from the menu stops the app until the next login or the next `voicechat app`.
 
 The menu bar gets one small waveform, the same in every state (the pill is where state shows);
 `menu_bar_icon = false` hides it. Its first line says what voicechat is doing right now, and the
-menu has **Talk** (open the mic now; during a take it ends the take early),
+menu has **Hide pill** / **Show pill**, **Talk** (open the mic now; during a take it ends the take early),
 **Stop speaking**, **Mute**, **Hands-free** and **Auto-send** checkboxes, the config file, and Quit.
 
 The key: **tap** it (under `tap_threshold_ms`, 350 ms) to start a dictation session, tap again to

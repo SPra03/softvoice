@@ -94,12 +94,15 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
             self.hf_item.state = 1 if hands_free else 0
             self.send_item = rumps.MenuItem("Auto-send", callback=self.on_auto_send)
             self.send_item.state = 1 if auto_submit else 0
+            self.pill_item = rumps.MenuItem("Hide pill", callback=self.on_toggle_pill)
             self.menu = [
                 self.status, None,
                 self.talk, self.stop_item, self.mute_item, self.hf_item, self.send_item, None,
-                rumps.MenuItem("Open config file", callback=self.on_config),
+                self.pill_item, rumps.MenuItem("Open config file", callback=self.on_config), None,
                 rumps.MenuItem("Quit voicechat", callback=self.on_quit),
             ]
+            if not cfg.panel:
+                self.pill_item._menuitem.setHidden_(True)
             self.tick = rumps.Timer(self.on_tick, 0.5)  # lets Python see Ctrl+C while the Cocoa loop runs
             self.tick.start()
 
@@ -123,6 +126,7 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
         def make_panel(self):
             try:
                 self.panel = Panel(self.session, on_quit=self.on_quit)
+                self.panel.on_visibility = self.pill_visibility
                 self.panel.apply_state(self.session.ui_state, "")
             except Exception as exc:
                 print(f"floating panel unavailable: {exc}", file=sys.stderr, flush=True)
@@ -130,6 +134,17 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
 
         def on_tick(self, _):
             pass
+
+        def on_toggle_pill(self, _):
+            if self.panel is not None:
+                self.panel.set_hidden(not self.panel.hidden)
+
+        def show_pill(self):  # a second `voicechat app` asked for it
+            if self.panel is not None:
+                self.panel.set_hidden(False)
+
+        def pill_visibility(self, hidden: bool) -> None:
+            self.pill_item.title = "Show pill" if hidden else "Hide pill"
 
         def on_talk(self, _):
             if self.session:
@@ -166,7 +181,16 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
                     self.session.stop()
                 except Exception:
                     pass
+            instance.release()
             rumps.quit_application()
+
+    from voicechat import instance
+
+    other = instance.claim()
+    if other is not None:  # one copy is enough: show its pill and leave
+        shown = other > 0 and instance.show(other)
+        print("voicechat app is already running" + (": showing its pill." if shown else "."), flush=True)
+        return 0
 
     app = App()
     ui = MenuBarUI(app)
@@ -201,7 +225,11 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
             traceback.print_exc()
             AppHelper.callAfter(app.on_quit)
 
+    # Python signal handlers run on the main thread between bytecodes; the 0.5 s rumps timer
+    # above makes sure there are some while the Cocoa loop runs.
     signal.signal(signal.SIGINT, lambda *_: app.on_quit())
+    signal.signal(signal.SIGTERM, lambda *_: app.on_quit())  # Quit from `autostart off`, launchctl, kill
+    signal.signal(instance.SHOW_SIGNAL, lambda *_: AppHelper.callAfter(app.show_pill))
     threading.Thread(target=boot, name="boot", daemon=True).start()
     if cfg.panel:
         AppHelper.callAfter(app.make_panel)  # runs once the Cocoa loop is up

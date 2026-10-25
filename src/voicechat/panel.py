@@ -323,6 +323,9 @@ class MenuActions(NSObject):
     def quit_(self, sender):
         self.panel.on_quit()
 
+    def hidePill_(self, sender):
+        self.panel.set_hidden(True)
+
     def toggleHighlight_(self, sender):
         self.panel.session.set_highlight(not self.panel.session.highlight_enabled)
 
@@ -347,6 +350,8 @@ class Panel:
         self._speak_t0 = 0.0
         self._speak_est = 1.0
         self._timer = None
+        self.hidden = False
+        self.on_visibility = None  # called with (hidden) so the menu bar item can say Show/Hide
         self.actions = MenuActions.alloc().initWithPanel_(self)
         r, g, b = accent_rgb(getattr(getattr(session, "cfg", None), "accent", "#E8735A"))
         self.accent = NSColor.colorWithSRGBRed_green_blue_alpha_(r, g, b, 1.0)
@@ -595,6 +600,7 @@ class Panel:
         voice_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Voice", None, "")
         voice_item.setSubmenu_(voices)
         menu.addItem_(voice_item)
+        add("Hide pill (Show pill is in the menu bar)", b"hidePill:")
         add("Open config file", b"openConfig:")
         menu.addItem_(NSMenuItem.separatorItem())
         add("Quit voicechat", b"quit:")
@@ -615,6 +621,16 @@ class Panel:
         except Exception:
             frame = NSScreen.mainScreen().visibleFrame()
             return frame.origin.x + frame.size.width - W - 24, frame.origin.y + 24
+
+    def set_hidden(self, hidden: bool) -> None:
+        """Tuck the pill away (nothing else changes: the key, the voice and the menu bar keep working)."""
+        self.hidden = hidden
+        if hidden:
+            self.window.orderOut_(None)
+        else:
+            self.window.orderFrontRegardless()
+        if self.on_visibility is not None:
+            self.on_visibility(hidden)
 
     def save_position(self) -> None:
         try:

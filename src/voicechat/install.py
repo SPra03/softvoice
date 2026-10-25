@@ -15,11 +15,17 @@ EVENTS = ("Stop", "Notification", "UserPromptSubmit")
 MARK = "voicechat hook"
 
 
-def hook_command() -> str:
+def executable() -> str | None:
+    """The `voicechat` command to call back into: the one running now, else the one on PATH."""
     exe = shutil.which("voicechat")
     argv0 = Path(sys.argv[0]).resolve() if sys.argv and sys.argv[0] else None
     if argv0 and argv0.name == "voicechat" and argv0.exists():
         exe = str(argv0)
+    return exe
+
+
+def hook_command() -> str:
+    exe = executable()
     if not exe:
         return f"{sys.executable} -m voicechat hook"
     return f"{exe} hook"

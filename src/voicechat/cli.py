@@ -61,6 +61,9 @@ def main(argv: list[str] | None = None) -> int:
     hf = p.add_mutually_exclusive_group()
     hf.add_argument("--hands-free", dest="hands_free", action="store_true", default=None)
     hf.add_argument("--no-hands-free", dest="hands_free", action="store_false")
+    p = sub.add_parser("autostart", help="run the app as a login item: starts at login, no terminal, back after a crash")
+    p.add_argument("action", nargs="?", choices=["on", "off", "status"], default="status")
+    p.add_argument("--hands-free", action="store_true", help="start hands-free (or set hands_free = true in the config)")
     p = sub.add_parser("transcribe", help="transcribe an audio file with Parakeet")
     p.add_argument("file")
 
@@ -317,6 +320,40 @@ def cmd_app(args) -> int:
                    paste=not args.no_paste, hands_free=hands_free)
 
 
+def cmd_autostart(args) -> int:
+    from voicechat import autostart, instance
+
+    if args.action == "on":
+        other = instance.running_pid()
+        if other:
+            print(f"stopping the copy started by hand (pid {other}) so the login item owns the app ...", flush=True)
+            if not instance.quit(other):
+                print("it did not stop; quit it yourself and run this again")
+                return 1
+        path = autostart.enable(["--hands-free"] if args.hands_free else [])
+        time.sleep(1.5)
+        st = autostart.status()
+        print(f"login item: {path}")
+        running = f" and is running now (pid {st['pid']})" if st.get("pid") else ""
+        print(f"voicechat app starts at every login{running}. Output: {autostart.APP_LOG}")
+        print("If macOS asks for the microphone, Accessibility or Input Monitoring again, that is because the app")
+        print("now runs under Python instead of your terminal. Grant them once and they stick.")
+        return 0
+    if args.action == "off":
+        if autostart.disable():
+            print("login item removed and the app stopped. `voicechat app` starts it by hand.")
+        else:
+            print("no login item was installed.")
+        return 0
+    st = autostart.status()
+    if not st["installed"]:
+        print("not installed. `voicechat autostart on` makes the app start at login.")
+    else:
+        where = f"running (pid {st['pid']})" if st.get("pid") else ("loaded, not running" if st["loaded"] else "installed, not loaded")
+        print(f"login item {autostart.PLIST_PATH}: {where}")
+    return 0
+
+
 def cmd_transcribe(args) -> int:
     from voicechat.stt import Transcriber
 
@@ -349,5 +386,6 @@ COMMANDS = {
     "config": cmd_config,
     "listen": cmd_listen,
     "app": cmd_app,
+    "autostart": cmd_autostart,
     "transcribe": cmd_transcribe,
 }
