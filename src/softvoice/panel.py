@@ -60,7 +60,7 @@ from Quartz import (
     kCGBlendModeDestinationOut,
 )
 
-from voicechat.config import HOME_DIR, accent_rgb, write_default_config
+from softvoice.config import HOME_DIR, accent_rgb, write_default_config
 
 POS_PATH = HOME_DIR / "panel.json"
 BTN = 28  # a button's hit area
@@ -572,7 +572,7 @@ class Panel:
             self.session.speak_selection_or_replay()
 
     def _show_menu(self, view):
-        from voicechat.tts import PREDEFINED_VOICES
+        from softvoice.tts import PREDEFINED_VOICES
 
         s = self.session
         menu = NSMenu.alloc().init()
@@ -603,9 +603,9 @@ class Panel:
         add("Hide pill (Show pill is in the menu bar)", b"hidePill:")
         add("Open config file", b"openConfig:")
         menu.addItem_(NSMenuItem.separatorItem())
-        add("Quit voicechat", b"quit:")
+        add("Quit softvoice", b"quit:")
         # Showing a menu activates us; give focus back to whatever app had it afterwards.
-        from voicechat.front import give_focus_to
+        from softvoice.front import give_focus_to
 
         previous = NSWorkspace.sharedWorkspace().frontmostApplication()
         menu.popUpMenuPositioningItem_atLocation_inView_(None, NSMakePoint(0, 0), view)

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-log = logging.getLogger("voicechat.stt")
+log = logging.getLogger("softvoice.stt")
 
 
 class Transcriber:

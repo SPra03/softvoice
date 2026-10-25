@@ -1,6 +1,6 @@
 import time
 
-from voicechat import highlight as H
+from softvoice import highlight as H
 
 
 def test_follow_loop_tracks_moving_text_and_stops_on_hide(monkeypatch):

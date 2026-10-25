@@ -1,7 +1,7 @@
 """Listening: push-to-talk, tap-to-talk, and hands-free turn-taking driven by the speaker daemon.
 
-One engine (`Session`) with two faces: the terminal (`voicechat listen`) and the macOS menu bar
-(`voicechat app`). Key gestures:
+One engine (`Session`) with two faces: the terminal (`softvoice listen`) and the macOS menu bar
+(`softvoice app`). Key gestures:
 
     hold the key        push-to-talk: record while held, transcribe on release
     tap the key         tap-to-talk: the mic opens, voice detection ends the take
@@ -26,7 +26,7 @@ import traceback
 
 import numpy as np
 
-from voicechat.config import Config, accent_rgb
+from softvoice.config import Config, accent_rgb
 
 RECORD_RATE = 16000
 
@@ -90,7 +90,7 @@ def earcon(kind: str) -> None:
 
 
 def paste_text(text: str, submit: bool, delay_ms: int) -> None:
-    from voicechat.hotkey import KEY_RETURN, KEY_V, press
+    from softvoice.hotkey import KEY_RETURN, KEY_V, press
 
     old = None
     if text:
@@ -108,9 +108,9 @@ def paste_text(text: str, submit: bool, delay_ms: int) -> None:
 
 def copy_selection() -> str:
     """Copy whatever is selected in the frontmost app and return it; "" when nothing is selected."""
-    from voicechat.hotkey import KEY_C, press
+    from softvoice.hotkey import KEY_C, press
 
-    sentinel = "\u2063voicechat-no-selection\u2063"
+    sentinel = "\u2063softvoice-no-selection\u2063"
     old = subprocess.run(["pbpaste"], capture_output=True).stdout
     subprocess.run(["pbcopy"], input=sentinel.encode())
     press(KEY_C, cmd=True)
@@ -123,7 +123,7 @@ def copy_selection() -> str:
 
 def _interrupt_speech(reason: str = "ptt") -> None:
     try:
-        from voicechat.client import send
+        from softvoice.client import send
 
         send({"cmd": "stop", "reason": reason}, autostart=False, timeout=0.3)
     except Exception:
@@ -208,7 +208,7 @@ class Recorder:
 # -- user interfaces ----------------------------------------------------------------
 
 class TerminalUI:
-    """Prints state changes; the default face of `voicechat listen`."""
+    """Prints state changes; the default face of `softvoice listen`."""
 
     def __init__(self, hotkey: str):
         self.hotkey = hotkey
@@ -233,7 +233,7 @@ class TerminalUI:
         pass  # committed sentences are logged as they land
 
     def run_on_main(self, fn) -> None:
-        fn()  # `voicechat listen` drives everything from the main thread already
+        fn()  # `softvoice listen` drives everything from the main thread already
 
     def now_speaking(self, text: str | None, est_seconds: float = 0.0, index: int = 0, total: int = 0) -> None:
         pass  # the terminal does not follow along
@@ -282,11 +282,11 @@ class Session:
 
     def start(self) -> None:
         """Load models, open the mic, start the key watcher and the daemon event feed. Blocks a few seconds."""
-        from voicechat.client import ensure_daemon
-        from voicechat.hotkey import resolve_key
-        from voicechat.permissions import accessibility, check_and_request, input_monitoring
-        from voicechat.stt import Transcriber
-        from voicechat.vad import UtteranceDetector
+        from softvoice.client import ensure_daemon
+        from softvoice.hotkey import resolve_key
+        from softvoice.permissions import accessibility, check_and_request, input_monitoring
+        from softvoice.stt import Transcriber
+        from softvoice.vad import UtteranceDetector
 
         self.key = resolve_key(self.hotkey)
         self._ui("loading", "Loading models…")
@@ -295,7 +295,7 @@ class Session:
         self.detector = UtteranceDetector(self.cfg.end_silence_ms)
         self.ui.log("starting the speaker daemon ...")
         if not ensure_daemon():
-            raise RuntimeError("the speaker daemon did not start; see `voicechat log`")
+            raise RuntimeError("the speaker daemon did not start; see `softvoice log`")
         self.recorder = Recorder(on_level=self._on_level)
         self.ui.log(f"ready. Tap {self.hotkey} to talk, or hold it to talk while held. Ctrl+C to quit.")
         if self.hands_free:
@@ -310,7 +310,7 @@ class Session:
         else:  # start the key watcher the moment the permission is toggled on
             threading.Thread(target=self._wait_for_input_monitoring, daemon=True).start()
         try:
-            from voicechat.front import FrontTracker
+            from softvoice.front import FrontTracker
 
             self.front = FrontTracker()
             self.ui.run_on_main(self.front.install)
@@ -318,7 +318,7 @@ class Session:
             self.ui.log(f"front-app tracking unavailable: {exc}")
         if getattr(self.ui, "supports_overlay", False):
             try:
-                from voicechat.highlight import Highlighter
+                from softvoice.highlight import Highlighter
 
                 self.highlighter = Highlighter(self.ui.run_on_main, accent_rgb(self.cfg.underline),
                                                other_pid=lambda: self.front.pid if self.front else None,
@@ -329,7 +329,7 @@ class Session:
         self._ui("idle")
 
     def wait(self) -> None:
-        from voicechat.hotkey import run_main_loop_once
+        from softvoice.hotkey import run_main_loop_once
 
         try:
             while not self.closing:
@@ -390,7 +390,7 @@ class Session:
         self.dict_cancel.set()
 
     def _dict_keys_on(self) -> None:  # main thread
-        from voicechat.hotkey import DictationKeys
+        from softvoice.hotkey import DictationKeys
 
         if self.dict_keys is None:
             keys = DictationKeys(self.finish_dictation, self.cancel_dictation)
@@ -409,7 +409,7 @@ class Session:
         threading.Thread(target=_interrupt_speech, args=("menu",), daemon=True).start()
 
     def set_muted(self, muted: bool) -> None:
-        from voicechat.client import send
+        from softvoice.client import send
 
         try:
             send({"cmd": "mute" if muted else "unmute"}, autostart=False, timeout=1.0)
@@ -424,7 +424,7 @@ class Session:
         self.ui.log(f"hands-free {'on' if on else 'off'}")
 
     def replay_last(self) -> None:
-        from voicechat.client import send
+        from softvoice.client import send
 
         try:
             resp = send({"cmd": "replay"}, autostart=False, timeout=1.0)
@@ -435,7 +435,7 @@ class Session:
 
     def speak_selection_or_replay(self) -> None:
         """The play button: read the text selected in the front app, or replay the last reply."""
-        from voicechat.client import send
+        from softvoice.client import send
 
         text = copy_selection() if self.paste else ""
         if text.strip():
@@ -451,8 +451,8 @@ class Session:
 
     def _clear_selection(self) -> None:
         """Drop the selection we just read, so the underline is what you see instead of the blue."""
-        from voicechat.front import front_pid
-        from voicechat.selection import clear_selection
+        from softvoice.front import front_pid
+        from softvoice.selection import clear_selection
 
         try:
             result = clear_selection(front_pid())
@@ -462,7 +462,7 @@ class Session:
             self.ui.log(f"  (selection not cleared: {result})")
 
     def set_voice(self, name: str) -> None:
-        from voicechat.client import send
+        from softvoice.client import send
 
         try:
             resp = send({"cmd": "voice", "voice": name}, autostart=False, timeout=30.0)
@@ -495,7 +495,7 @@ class Session:
             return True
 
     def _start_key_listener(self) -> None:
-        from voicechat.hotkey import Hotkey
+        from softvoice.hotkey import Hotkey
 
         self.hotkey_tap = Hotkey(self.key, self._on_press, self._on_release, on_scroll=self._on_scroll)
 
@@ -513,7 +513,7 @@ class Session:
         """Pasting works the moment Accessibility is granted, but reading other apps' windows (the
         underline) stays blocked in a process that started untrusted. Under the login item we can
         simply exit: launchd starts us again within seconds."""
-        from voicechat.permissions import accessibility
+        from softvoice.permissions import accessibility
 
         while not self.closing:
             time.sleep(2.0)
@@ -521,14 +521,14 @@ class Session:
                 break
         if self.closing:
             return
-        if os.environ.get("VOICECHAT_LAUNCHD"):
+        if os.environ.get("SOFTVOICE_LAUNCHD"):
             self.ui.log("Accessibility granted. Restarting so the underline can read the page ...")
             time.sleep(1.0)
             os._exit(3)  # not a clean exit: KeepAlive brings us back
-        self.ui.log("Accessibility granted: pasting works now. Quit and start voicechat app again for the underline.")
+        self.ui.log("Accessibility granted: pasting works now. Quit and start softvoice app again for the underline.")
 
     def _wait_for_input_monitoring(self) -> None:
-        from voicechat.permissions import input_monitoring
+        from softvoice.permissions import input_monitoring
 
         while not self.closing:
             time.sleep(2.0)
@@ -595,7 +595,7 @@ class Session:
     # -- the daemon's events --
 
     def _event_loop(self) -> None:
-        from voicechat.client import ensure_daemon, subscribe
+        from softvoice.client import ensure_daemon, subscribe
 
         while not self.closing:
             try:
@@ -773,12 +773,12 @@ class Session:
         return text
 
     def _transcribe16(self, audio16: np.ndarray) -> str:
-        from voicechat.vad import RATE
+        from softvoice.vad import RATE
 
         return self.transcriber.transcribe(audio16, RATE)
 
     def _dictation_loop(self, continue_recording: bool) -> None:
-        from voicechat.vad import RATE, SegmentDetector
+        from softvoice.vad import RATE, SegmentDetector
 
         cfg = self.cfg
         pad = int(0.2 * RATE)
@@ -891,7 +891,7 @@ class Session:
     def _paste_target(self) -> tuple[str | None, str | None, int | None, bool]:
         """(bundle, name, pid, ours): where a paste would land. When our own app is in front, the
         target is the last other front app, and `ours` says focus must be handed back first."""
-        from voicechat.front import front_pid
+        from softvoice.front import front_pid
 
         pid = front_pid()
         if pid is not None and pid == os.getpid() and self.front is not None and self.front.pid:
@@ -904,7 +904,7 @@ class Session:
         allowed-targets check and remembers the target: for push-to-talk and dictation, which you
         started on purpose. Hands-free, where the mic opens by itself, keeps the check. False means
         the text went to the clipboard instead, and the log says why."""
-        from voicechat.front import give_focus_to
+        from softvoice.front import give_focus_to
 
         bundle, name, pid, ours = self._paste_target()
         if not anywhere and not target_allowed(bundle, self.cfg.paste_targets, self.last_ptt_target):
@@ -924,7 +924,7 @@ class Session:
         return True
 
     def _can_paste(self, text: str) -> bool:
-        from voicechat.permissions import accessibility
+        from softvoice.permissions import accessibility
 
         if accessibility() is False:
             subprocess.run(["pbcopy"], input=text.encode())

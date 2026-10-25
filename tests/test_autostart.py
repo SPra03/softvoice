@@ -1,6 +1,6 @@
 import os
 
-from voicechat import autostart, instance
+from softvoice import autostart, instance
 
 
 def test_login_item_runs_the_app_and_comes_back_only_after_a_crash(tmp_path, monkeypatch):

@@ -1,4 +1,4 @@
-from voicechat.ptt import is_cancel, target_allowed
+from softvoice.ptt import is_cancel, target_allowed
 
 PATTERNS = ["com.apple.Terminal", "com.anthropic.claudefordesktop", "com.jetbrains.*"]
 
@@ -20,14 +20,14 @@ def test_cancel_words():
 
 
 def test_tap_versus_hold():
-    from voicechat.ptt import is_tap
+    from softvoice.ptt import is_tap
 
     assert is_tap(0.12, 350)
     assert not is_tap(0.6, 350)
 
 
 def test_strip_send_word():
-    from voicechat.ptt import strip_send_word
+    from softvoice.ptt import strip_send_word
 
     words = ["send it", "send"]
     assert strip_send_word("Fix the login bug and add a test. Send it.", words) == ("Fix the login bug and add a test.", True)
@@ -38,7 +38,7 @@ def test_strip_send_word():
 
 
 def test_resolve_key_names():
-    from voicechat.hotkey import resolve_key
+    from softvoice.hotkey import resolve_key
 
     assert resolve_key("alt_r").keycode == 61
     assert (resolve_key("F5").keycode, resolve_key("F5").flag) == (96, None)
@@ -50,7 +50,7 @@ def test_resolve_key_names():
 def test_front_tracker_ignores_our_own_process():
     import os
 
-    from voicechat.front import FrontTracker
+    from softvoice.front import FrontTracker
 
     class App:
         def __init__(self, pid, bundle, name):
@@ -76,7 +76,7 @@ def test_front_tracker_ignores_our_own_process():
 def test_dictation_keys_swallow_return_and_escape_only():
     import Quartz
 
-    from voicechat.hotkey import KEY_ESCAPE, KEY_RETURN, DictationKeys
+    from softvoice.hotkey import KEY_ESCAPE, KEY_RETURN, DictationKeys
 
     hits = []
     keys = DictationKeys(on_accept=lambda: hits.append("accept"), on_cancel=lambda: hits.append("cancel"))
@@ -97,7 +97,7 @@ def test_dictation_keys_swallow_return_and_escape_only():
 
 
 def test_front_pid_never_reports_loginwindow(monkeypatch):
-    from voicechat import front
+    from softvoice import front
 
     class FakeApp:
         def processIdentifier(self):
@@ -117,7 +117,7 @@ def test_front_pid_never_reports_loginwindow(monkeypatch):
 def test_talk_key_combination_is_pressed_released_and_swallowed():
     import Quartz
 
-    from voicechat.hotkey import Hotkey, resolve_key
+    from softvoice.hotkey import Hotkey, resolve_key
 
     b = resolve_key("alt+space")
     assert (b.keycode, b.mods, b.combo) == (49, Quartz.kCGEventFlagMaskAlternate, True)

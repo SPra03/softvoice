@@ -1,6 +1,6 @@
 """User configuration and well-known paths.
 
-Everything voicechat owns lives under ~/.voicechat: the config file, the daemon's
+Everything softvoice owns lives under ~/.softvoice: the config file, the daemon's
 Unix socket, its log, and its pid file.
 """
 
@@ -12,7 +12,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-HOME_DIR = Path(os.environ.get("VOICECHAT_HOME", Path.home() / ".voicechat"))
+HOME_DIR = Path(os.environ.get("SOFTVOICE_HOME", Path.home() / ".softvoice"))
 CONFIG_PATH = HOME_DIR / "config.toml"
 SOCKET_PATH = HOME_DIR / "daemon.sock"
 LOG_PATH = HOME_DIR / "daemon.log"
@@ -23,7 +23,7 @@ PID_PATH = HOME_DIR / "daemon.pid"
 class Config:
     # Speaking
     voice: str = "alba"  # a Pocket TTS predefined voice, or a path/URL to a WAV to clone
-    language: str = "english"  # Pocket TTS model id, see `voicechat voices`
+    language: str = "english"  # Pocket TTS model id, see `softvoice voices`
     max_chars: int = 0  # 0 = speak the whole reply; otherwise cut here, at a sentence boundary, and say truncation_suffix
     speak_whole_turn: bool = True  # speak every substantial text block of the turn, not only the last one
     interim_min_chars: int = 200  # shorter blocks before tool calls are progress notes: skipped
@@ -86,9 +86,9 @@ class Config:
         an old `max_chars = 1400` outlived the change to 0.)
         """
         lines = [
-            "# voicechat configuration. Each line shows a setting with its default value;",
-            "# remove the leading '# ' to change one. Then restart: `voicechat restart`, and",
-            "# relaunch `voicechat app` if it is running.",
+            "# softvoice configuration. Each line shows a setting with its default value;",
+            "# remove the leading '# ' to change one. Then restart: `softvoice restart`, and",
+            "# relaunch `softvoice app` if it is running.",
             "",
         ]
         for f in dataclasses.fields(self):

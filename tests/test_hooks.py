@@ -1,6 +1,6 @@
 import json
 
-from voicechat.hooks import interpret, last_assistant_text_from_transcript
+from softvoice.hooks import interpret, last_assistant_text_from_transcript
 
 NOTIFY = ["permission_prompt"]
 
@@ -71,7 +71,7 @@ def test_whole_turn_speaks_substance_before_tool_calls(tmp_path):
 
 
 def test_split_sentences_merges_short_ones():
-    from voicechat.daemon import split_sentences
+    from softvoice.daemon import split_sentences
 
     text = "Yes. That is possible, and I would do it in two layers. Here is why! Short? Done."
     out = split_sentences(text)

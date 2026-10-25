@@ -10,7 +10,7 @@ import sys
 import time
 from typing import Any
 
-from voicechat.config import LOG_PATH, SOCKET_PATH, ensure_home
+from softvoice.config import LOG_PATH, SOCKET_PATH, ensure_home
 
 
 class DaemonUnavailable(RuntimeError):
@@ -45,7 +45,7 @@ def spawn_daemon() -> None:
     ensure_home()
     log = open(LOG_PATH, "ab")
     subprocess.Popen(
-        [sys.executable, "-m", "voicechat", "serve"],
+        [sys.executable, "-m", "softvoice", "serve"],
         stdin=subprocess.DEVNULL,
         stdout=log,
         stderr=log,
@@ -75,7 +75,7 @@ def send(req: dict[str, Any], autostart: bool = True, timeout: float = 5.0, wait
         return _request(req, timeout)
     except (OSError, ValueError):
         if not autostart or not ensure_daemon(wait):
-            raise DaemonUnavailable("voicechat daemon is not running (start it with: voicechat serve)")
+            raise DaemonUnavailable("softvoice daemon is not running (start it with: softvoice serve)")
         return _request(req, timeout)
 
 

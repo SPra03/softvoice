@@ -9,13 +9,13 @@ import sys
 import time
 from pathlib import Path
 
-from voicechat import __version__
-from voicechat.config import CONFIG_PATH, LOG_PATH, Config, write_default_config
+from softvoice import __version__
+from softvoice.config import CONFIG_PATH, LOG_PATH, Config, write_default_config
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="voicechat", description="On-device voice in and out for Claude Code and Codex.")
-    parser.add_argument("--version", action="version", version=f"voicechat {__version__}")
+    parser = argparse.ArgumentParser(prog="softvoice", description="On-device voice in and out for Claude Code and Codex.")
+    parser.add_argument("--version", action="version", version=f"softvoice {__version__}")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("serve", help="run the speaker daemon (normally started for you)")
@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("install", help="write hooks into Claude Code and Codex settings")
     p.add_argument("--claude-only", action="store_true")
     p.add_argument("--codex-only", action="store_true")
-    sub.add_parser("uninstall", help="remove voicechat hooks")
+    sub.add_parser("uninstall", help="remove softvoice hooks")
     sub.add_parser("config", help="print the config file path and contents")
 
     p = sub.add_parser("listen", help="push-to-talk: hold the hotkey, speak, release to paste")
@@ -74,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
 # -- speaking -----------------------------------------------------------------------
 
 def cmd_serve(args) -> int:
-    from voicechat.daemon import serve
+    from softvoice.daemon import serve
 
     return serve(foreground=args.foreground)
 
@@ -87,8 +87,8 @@ def cmd_say(args) -> int:
     if args.out:
         import soundfile as sf
 
-        from voicechat.clean import clean
-        from voicechat.tts import Speaker
+        from softvoice.clean import clean
+        from softvoice.tts import Speaker
 
         cfg = Config.load()
         spoken = text if args.raw else clean(text, cfg.max_chars, cfg.truncation_suffix).text
@@ -109,7 +109,7 @@ def cmd_simple(cmd: str, **fields):
 
 
 def cmd_status(args) -> int:
-    from voicechat.client import alive, send
+    from softvoice.client import alive, send
 
     if not alive():
         print("daemon: not running")
@@ -119,9 +119,9 @@ def cmd_status(args) -> int:
 
 
 def cmd_restart(args) -> int:
-    from voicechat.client import alive, send
+    from softvoice.client import alive, send
 
-    from voicechat.config import PID_PATH
+    from softvoice.config import PID_PATH
 
     old_pid = None
     try:
@@ -134,10 +134,10 @@ def cmd_restart(args) -> int:
         if not alive() and not (old_pid and _pid_running(old_pid)):
             break
         time.sleep(0.1)
-    from voicechat.client import ensure_daemon
+    from softvoice.client import ensure_daemon
 
     ok = ensure_daemon()
-    print("daemon restarted" if ok else "daemon did not come up; see: voicechat log")
+    print("daemon restarted" if ok else "daemon did not come up; see: softvoice log")
     return 0 if ok else 1
 
 
@@ -156,7 +156,7 @@ def cmd_voice(args) -> int:
 
 
 def cmd_voices(args) -> int:
-    from voicechat.tts import PREDEFINED_VOICES
+    from softvoice.tts import PREDEFINED_VOICES
 
     print("\n".join(PREDEFINED_VOICES))
     print("\nOr pass a path to a short WAV of a voice to clone. Set `voice` in", CONFIG_PATH)
@@ -173,7 +173,7 @@ def cmd_log(args) -> int:
 
 
 def _send(req: dict, autostart: bool = True) -> int:
-    from voicechat.client import DaemonUnavailable, send
+    from softvoice.client import DaemonUnavailable, send
 
     try:
         resp = send(req, autostart=autostart)
@@ -193,13 +193,13 @@ def _send(req: dict, autostart: bool = True) -> int:
 
 def _hook_payload(raw: str) -> int:
     """Shared by `hook` (stdin) and `notify` (argv). Never fails loudly: agents must not notice us."""
-    if os.environ.get("VOICECHAT_DISABLED"):
+    if os.environ.get("SOFTVOICE_DISABLED"):
         return 0
     try:
         payload = json.loads(raw) if raw.strip() else {}
         cfg = Config.load()
-        from voicechat.client import send
-        from voicechat.hooks import interpret
+        from softvoice.client import send
+        from softvoice.hooks import interpret
 
         action = interpret(payload, cfg.speak_notifications, cfg.interrupt_on_prompt,
                            whole_turn=cfg.speak_whole_turn, interim_min_chars=cfg.interim_min_chars)
@@ -209,7 +209,7 @@ def _hook_payload(raw: str) -> int:
             send({"cmd": "stop", "reason": "prompt"}, autostart=False)
     except Exception as exc:  # log and stay silent: stdout must stay clean for Codex
         try:
-            from voicechat.config import HOME_DIR, ensure_home
+            from softvoice.config import HOME_DIR, ensure_home
 
             ensure_home()
             with open(HOME_DIR / "hook.log", "a") as fh:
@@ -231,14 +231,14 @@ def cmd_setup(args) -> int:
     """Everything that would otherwise happen, slowly, the first time you use it."""
     from huggingface_hub import hf_hub_download
 
-    from voicechat import permissions
+    from softvoice import permissions
 
     cfg = Config.load()
     print(f"config: {write_default_config()}")
 
     t0 = time.monotonic()
     print(f"Pocket TTS ({cfg.language}, voice {cfg.voice}): about 230 MB the first time", flush=True)
-    from voicechat.tts import Speaker
+    from softvoice.tts import Speaker
 
     Speaker(cfg)
     print(f"  ready in {time.monotonic() - t0:.0f}s")
@@ -259,12 +259,12 @@ def cmd_setup(args) -> int:
     except Exception as exc:
         print(f"Microphone: could not open ({exc})")
     permissions.check_and_request(need_paste=True, need_hotkey=True)
-    print("Next: `voicechat install` adds the hooks, then `voicechat app --hands-free` starts the pill.")
+    print("Next: `softvoice install` adds the hooks, then `softvoice app --hands-free` starts the pill.")
     return 0
 
 
 def cmd_install(args) -> int:
-    from voicechat import install as inst
+    from softvoice import install as inst
 
     write_default_config()
     command = inst.hook_command()
@@ -280,13 +280,13 @@ def cmd_install(args) -> int:
             print(f"Codex: hooks written to {path}" + (f" (backup {backup.name})" if backup else ""))
             print("  Run /hooks inside Codex once to trust them.")
         else:
-            print("Codex: ~/.codex not found, skipped. When you install Codex, run `voicechat install --codex-only`.")
+            print("Codex: ~/.codex not found, skipped. When you install Codex, run `softvoice install --codex-only`.")
     print(f"config: {CONFIG_PATH}")
     return 0
 
 
 def cmd_uninstall(args) -> int:
-    from voicechat import install as inst
+    from softvoice import install as inst
 
     for label, fn in (("Claude Code", inst.uninstall_claude), ("Codex", inst.uninstall_codex)):
         path = fn()
@@ -304,7 +304,7 @@ def cmd_config(args) -> int:
 # -- listening ----------------------------------------------------------------------
 
 def cmd_listen(args) -> int:
-    from voicechat.ptt import listen
+    from softvoice.ptt import listen
 
     cfg = Config.load()
     return listen(cfg, hotkey=args.hotkey or cfg.hotkey, auto_submit=args.auto_submit or cfg.auto_submit,
@@ -312,7 +312,7 @@ def cmd_listen(args) -> int:
 
 
 def cmd_app(args) -> int:
-    from voicechat.menubar import run_app
+    from softvoice.menubar import run_app
 
     cfg = Config.load()
     hands_free = cfg.hands_free if args.hands_free is None else args.hands_free
@@ -321,7 +321,7 @@ def cmd_app(args) -> int:
 
 
 def cmd_autostart(args) -> int:
-    from voicechat import autostart, instance
+    from softvoice import autostart, instance
 
     if args.action == "on":
         other = instance.running_pid()
@@ -335,19 +335,19 @@ def cmd_autostart(args) -> int:
         st = autostart.status()
         print(f"login item: {path}")
         running = f" and is running now (pid {st['pid']})" if st.get("pid") else ""
-        print(f"voicechat app starts at every login{running}. Output: {autostart.APP_LOG}")
+        print(f"softvoice app starts at every login{running}. Output: {autostart.APP_LOG}")
         print("If macOS asks for the microphone, Accessibility or Input Monitoring again, that is because the app")
         print("now runs under Python instead of your terminal. Grant them once and they stick.")
         return 0
     if args.action == "off":
         if autostart.disable():
-            print("login item removed and the app stopped. `voicechat app` starts it by hand.")
+            print("login item removed and the app stopped. `softvoice app` starts it by hand.")
         else:
             print("no login item was installed.")
         return 0
     st = autostart.status()
     if not st["installed"]:
-        print("not installed. `voicechat autostart on` makes the app start at login.")
+        print("not installed. `softvoice autostart on` makes the app start at login.")
     else:
         where = f"running (pid {st['pid']})" if st.get("pid") else ("loaded, not running" if st["loaded"] else "installed, not loaded")
         print(f"login item {autostart.PLIST_PATH}: {where}")
@@ -355,7 +355,7 @@ def cmd_autostart(args) -> int:
 
 
 def cmd_transcribe(args) -> int:
-    from voicechat.stt import Transcriber
+    from softvoice.stt import Transcriber
 
     cfg = Config.load()
     t = Transcriber(cfg.stt_model)

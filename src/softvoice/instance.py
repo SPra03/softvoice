@@ -1,7 +1,7 @@
-"""One `voicechat app` at a time.
+"""One `softvoice app` at a time.
 
-The running app holds a lock on ~/.voicechat/app.pid (released by the kernel when it exits, so a
-crash never leaves a stale lock). A second `voicechat app` sees the lock, asks the first one to
+The running app holds a lock on ~/.softvoice/app.pid (released by the kernel when it exits, so a
+crash never leaves a stale lock). A second `softvoice app` sees the lock, asks the first one to
 show its pill with a signal, and exits.
 """
 
@@ -12,7 +12,7 @@ import os
 import signal
 import time
 
-from voicechat.config import HOME_DIR, ensure_home
+from softvoice.config import HOME_DIR, ensure_home
 
 APP_PID_PATH = HOME_DIR / "app.pid"
 SHOW_SIGNAL = signal.SIGUSR1  # "show your pill"

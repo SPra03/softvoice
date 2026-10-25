@@ -1,8 +1,8 @@
-"""`voicechat autostart`: run the app as a macOS login item.
+"""`softvoice autostart`: run the app as a macOS login item.
 
-A LaunchAgent in ~/Library/LaunchAgents starts `voicechat app` when you log in, with no terminal
+A LaunchAgent in ~/Library/LaunchAgents starts `softvoice app` when you log in, with no terminal
 involved, and starts it again if it ever crashes (not after you quit it on purpose). Permissions
-are then attributed to the Python running voicechat rather than to a terminal, so macOS asks for
+are then attributed to the Python running softvoice rather than to a terminal, so macOS asks for
 them once more the first time.
 """
 
@@ -14,10 +14,10 @@ import re
 import subprocess
 from pathlib import Path
 
-from voicechat.config import HOME_DIR, ensure_home
-from voicechat.install import executable
+from softvoice.config import HOME_DIR, ensure_home
+from softvoice.install import executable
 
-LABEL = "com.voicechat.app"
+LABEL = "com.softvoice.app"
 PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 APP_LOG = HOME_DIR / "app.log"
 
@@ -28,7 +28,7 @@ def program() -> list[str]:
         return [exe]
     import sys
 
-    return [sys.executable, "-m", "voicechat"]
+    return [sys.executable, "-m", "softvoice"]
 
 
 def plist(extra_args: list[str] | tuple[str, ...] = ()) -> dict:
@@ -44,7 +44,7 @@ def plist(extra_args: list[str] | tuple[str, ...] = ()) -> dict:
         "EnvironmentVariables": {
             "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
             "PYTHONUNBUFFERED": "1",
-            "VOICECHAT_LAUNCHD": "1",  # lets the app know a crash-exit brings it back
+            "SOFTVOICE_LAUNCHD": "1",  # lets the app know a crash-exit brings it back
         },
     }
 

@@ -21,11 +21,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from voicechat import __version__
-from voicechat.clean import clean
-from voicechat.config import LOG_PATH, PID_PATH, SOCKET_PATH, Config, ensure_home
+from softvoice import __version__
+from softvoice.clean import clean
+from softvoice.config import LOG_PATH, PID_PATH, SOCKET_PATH, Config, ensure_home
 
-log = logging.getLogger("voicechat.daemon")
+log = logging.getLogger("softvoice.daemon")
 
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 
@@ -201,8 +201,8 @@ class Engine:
     # -- worker --------------------------------------------------------------------
 
     def _run(self) -> None:
-        from voicechat.player import Player
-        from voicechat.tts import Speaker
+        from softvoice.player import Player
+        from softvoice.tts import Speaker
 
         try:
             self.speaker = Speaker(self.cfg)
@@ -373,7 +373,7 @@ def serve(foreground: bool = False) -> int:
     engine = Engine(cfg)
     server = Server(str(SOCKET_PATH), engine)
     os.chmod(SOCKET_PATH, 0o600)
-    log.info("voicechat %s listening on %s (pid %d)", __version__, SOCKET_PATH, os.getpid())
+    log.info("softvoice %s listening on %s (pid %d)", __version__, SOCKET_PATH, os.getpid())
     t = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.2}, daemon=True)
     t.start()
     try:

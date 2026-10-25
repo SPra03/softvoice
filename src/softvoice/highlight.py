@@ -53,7 +53,7 @@ def trusted() -> bool | None:
 
 
 def _front_pid() -> int | None:
-    from voicechat.front import front_pid
+    from softvoice.front import front_pid
 
     return front_pid()
 

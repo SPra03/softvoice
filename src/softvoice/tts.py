@@ -9,9 +9,9 @@ from typing import Iterator
 
 import numpy as np
 
-from voicechat.config import Config
+from softvoice.config import Config
 
-log = logging.getLogger("voicechat.tts")
+log = logging.getLogger("softvoice.tts")
 
 PREDEFINED_VOICES = [
     "alba", "anna", "azelma", "bill_boerst", "caro_davy", "charles", "cosette", "eponine", "eve",
@@ -45,6 +45,6 @@ class Speaker:
             yield chunk.detach().cpu().numpy().astype(np.float32).reshape(-1)
 
     def synthesize(self, text: str) -> np.ndarray:
-        """Whole utterance as one array (used by tests and `voicechat say --out`)."""
+        """Whole utterance as one array (used by tests and `softvoice say --out`)."""
         parts = list(self.stream(text, threading.Event()))
         return np.concatenate(parts) if parts else np.zeros(0, dtype=np.float32)

@@ -66,7 +66,7 @@ Machine: MacBook Air M4, 24 GB, macOS 26.6.2, Claude Code 2.1.268, Node 26, syst
 - FluidAudio (Swift, Apache 2.0, ~3.2k stars): Parakeet TDT/EOU, Silero VAD, Kokoro, Pocket TTS, all Core ML on ANE/GPU. macOS 14+. Single-binary path.
 - mlx-audio (Python, MIT, ~8k stars): Whisper, Parakeet, Voxtral STT; Kokoro, Qwen3-TTS, many TTS; `--stream`; OpenAI-compatible `/v1/audio/speech` and `/v1/audio/transcriptions` server. Fast-iteration path.
 
-## Proposed build: `voicechat`
+## Proposed build: `softvoice`
 
 Phase 1, output (the missing piece):
 - Daemon keeps the TTS model loaded. Claude Code `Stop` hook and Codex `Stop` hook post

@@ -1,4 +1,4 @@
-from voicechat.clean import clean
+from softvoice.clean import clean
 
 
 def speak(md, **kw):
@@ -32,11 +32,11 @@ def test_tables_are_dropped():
 
 
 def test_paths_become_basenames():
-    assert speak("Edited src/voicechat/clean.py and /Users/me/dev/app/main.go today.") == (
+    assert speak("Edited src/softvoice/clean.py and /Users/me/dev/app/main.go today.") == (
         "Edited clean.py and main.go today."
     )
     assert speak("Look at clean.py:42 for the bug.") == "Look at clean.py line 42 for the bug."
-    assert speak("See src/voicechat/clean.py:42:7 too.") == "See clean.py line 42 too."
+    assert speak("See src/softvoice/clean.py:42:7 too.") == "See clean.py line 42 too."
 
 
 def test_secrets_are_redacted():

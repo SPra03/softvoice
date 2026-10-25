@@ -1,13 +1,13 @@
-# voicechat
+# softvoice
 
 **Talk to Claude Code and Codex, and hear them talk back. Everything stays on your Mac.**
 
 ![macOS Apple Silicon](https://img.shields.io/badge/macOS%2014%2B-Apple%20Silicon-black?logo=apple)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-[![PyPI](https://img.shields.io/pypi/v/voicechat-mac?color=blue)](https://pypi.org/project/voicechat-mac/)
+[![PyPI](https://img.shields.io/pypi/v/softvoice?color=blue)](https://pypi.org/project/softvoice/)
 ![On-device](https://img.shields.io/badge/your%20voice%20%26%20text-never%20leave%20your%20Mac-blue)
-[![CI](https://github.com/SPra03/voicechat/actions/workflows/ci.yml/badge.svg)](https://github.com/SPra03/voicechat/actions/workflows/ci.yml)
+[![CI](https://github.com/SPra03/softvoice/actions/workflows/ci.yml/badge.svg)](https://github.com/SPra03/softvoice/actions/workflows/ci.yml)
 
 Your coding agent finishes a turn and reads its reply aloud, underlining each sentence on the
 page as it goes. You answer by talking: tap a key, say what you want, press Enter. A small glass
@@ -26,32 +26,32 @@ Three commands, with [uv](https://docs.astral.sh/uv/) doing the Python work:
 
 ```bash
 brew install uv
-uv tool install voicechat-mac
-voicechat setup
+uv tool install softvoice
+softvoice setup
 ```
 
-(Or the newest commit straight from GitHub: `uv tool install git+https://github.com/SPra03/voicechat`.)
+(Or the newest commit straight from GitHub: `uv tool install git+https://github.com/SPra03/softvoice`.)
 
 `setup` downloads the two models once (Pocket TTS, about 230 MB; Parakeet, 2.5 GB) and asks
 macOS for the permissions below. Then:
 
 ```bash
-voicechat install          # hooks into Claude Code (and Codex, if ~/.codex exists)
-voicechat autostart on     # the pill, now and at every login, with no terminal left open
+softvoice install          # hooks into Claude Code (and Codex, if ~/.codex exists)
+softvoice autostart on     # the pill, now and at every login, with no terminal left open
 ```
 
 `install` writes three hooks into `~/.claude/settings.json` (a backup is kept next to it) and,
 if `~/.codex` exists, into `~/.codex/hooks.json`. Restart your Claude Code sessions so they pick
 the hooks up; Codex needs a one-time `/hooks` to trust them. Upgrade later with
-`uv tool upgrade voicechat-mac`; `voicechat uninstall` removes the hooks, `voicechat autostart off`
-the login item, and everything voicechat owns lives in `~/.voicechat`.
+`uv tool upgrade softvoice`; `softvoice uninstall` removes the hooks, `softvoice autostart off`
+the login item, and everything softvoice owns lives in `~/.softvoice`.
 
 Needs about 4 GB of disk for the models and the Python environment, and about 2 GB of memory
 while running. The models load once at start; idle, it uses no CPU.
 
 ### Permissions
 
-macOS grants these to the app that owns the terminal you run voicechat from (Terminal, iTerm,
+macOS grants these to the app that owns the terminal you run softvoice from (Terminal, iTerm,
 the Claude desktop app, VS Code), or to Python itself when the login item starts it. Each is
 asked for once.
 
@@ -71,7 +71,7 @@ because nothing else uses it on its own. Prefer a combination? One line in the c
 `hotkey = "alt+space"` (or `ctrl+shift+d`, `fn+space`, ...). A combination is swallowed, so the
 app in front never sees it.
 
-| when | you | voicechat |
+| when | you | softvoice |
 | --- | --- | --- |
 | any time | **tap** the talk key, or click the mic | opens a dictation session: talk as long as you like, your words appear in the pill |
 | dictating | tap again, press **Enter**, or click **✓** | pastes everything into your prompt, where you can still edit it |
@@ -95,7 +95,7 @@ prompt as usual.
 
 ## Hearing replies
 
-Nothing else to run. When an agent finishes a turn, its Stop hook calls `voicechat hook`, which
+Nothing else to run. When an agent finishes a turn, its Stop hook calls `softvoice hook`, which
 hands the reply to a small daemon (started on demand, kept warm) that cleans and speaks it:
 
 - the whole turn is spoken, not just the last paragraph: every text block of at least
@@ -108,11 +108,11 @@ hands the reply to a small daemon (started on demand, kept warm) that cleans and
 - permission prompts are spoken too; sending a new prompt interrupts speech
 
 ```bash
-voicechat say "hello there"      # speak anything
-voicechat stop                   # shut up
-voicechat mute / unmute          # stay silent across turns
-voicechat voice jane             # try another voice (see `voicechat voices`)
-voicechat status | log | restart
+softvoice say "hello there"      # speak anything
+softvoice stop                   # shut up
+softvoice mute / unmute          # stay silent across turns
+softvoice voice jane             # try another voice (see `softvoice voices`)
+softvoice status | log | restart
 ```
 
 ### Following along
@@ -137,13 +137,13 @@ started them on purpose. Hands-free, where the mic opens by itself, is more care
 only into terminals and agent apps (`paste_targets`) or an app you have dictated into before, and
 otherwise puts the text on the clipboard and tells you.
 
-Without the pill, from a terminal: `voicechat listen` (hold the key, speak, release) and
-`voicechat listen --hands-free`. `--auto-submit` presses Enter for you; `--no-paste` only prints.
+Without the pill, from a terminal: `softvoice listen` (hold the key, speak, release) and
+`softvoice listen --hands-free`. `--auto-submit` presses Enter for you; `--no-paste` only prints.
 
 ## The pill and the menu bar
 
 ```bash
-voicechat app --hands-free    # by hand; `voicechat autostart on` does this at every login
+softvoice app --hands-free    # by hand; `softvoice autostart on` does this at every login
 ```
 
 A small dark glass pill (36 points tall) floats above every window, bottom right by default.
@@ -173,21 +173,21 @@ edit before sending.
 Underline, Voice, Hide pill, config file, Quit. `panel = false` in the config turns the pill off.
 
 The menu bar gets one small waveform, the same in every state (the pill is where state shows);
-`menu_bar_icon = false` hides it. Its first line says what voicechat is doing right now, and the
+`menu_bar_icon = false` hides it. Its first line says what softvoice is doing right now, and the
 menu has **Hide pill** / **Show pill**, **Talk**, **Stop speaking**, **Mute**, **Hands-free** and
 **Auto-send**, the config file, and Quit.
 
 ### Running without a terminal
 
-`voicechat autostart on` registers the app as a macOS login item: it starts when you log in, needs
+`softvoice autostart on` registers the app as a macOS login item: it starts when you log in, needs
 no terminal, and comes back by itself if it ever crashes (not after you quit it on purpose).
-`voicechat autostart off` removes the login item and stops the app; `voicechat autostart` shows
-the state. The app's output goes to `~/.voicechat/app.log`.
+`softvoice autostart off` removes the login item and stops the app; `softvoice autostart` shows
+the state. The app's output goes to `~/.softvoice/app.log`.
 
-Only one copy of the app runs at a time: `voicechat app` while it is already running just shows
+Only one copy of the app runs at a time: `softvoice app` while it is already running just shows
 the pill of the running one. **Hide pill** tucks the pill away while the key, the voice and the
 menu bar keep working; **Show pill** brings it back. Quit from the menu stops the app until the
-next login or the next `voicechat app`.
+next login or the next `softvoice app`.
 
 ## Hands-free
 
@@ -207,9 +207,9 @@ yourself, or interrupted the speaker, the mic stays closed.
 
 ## Configuration
 
-`~/.voicechat/config.toml` (`voicechat config` prints it) lists every setting with its default,
+`~/.softvoice/config.toml` (`softvoice config` prints it) lists every setting with its default,
 all commented out; remove the `# ` from a line to change it. Restart the daemon after changes
-(`voicechat restart`) and relaunch the app (`voicechat autostart on` again, or Quit and `voicechat app`).
+(`softvoice restart`) and relaunch the app (`softvoice autostart on` again, or Quit and `softvoice app`).
 
 | key | default | meaning |
 | --- | --- | --- |
@@ -240,16 +240,16 @@ all commented out; remove the `# ` from a line to change it. Restart the daemon 
 | `cancel_words` | `["cancel", ...]` | say one of these to discard a take |
 | `paste_targets` | terminals, Claude, VS Code, Cursor, JetBrains, Codex | bundle ids hands-free may paste into (dictation you start yourself pastes anywhere) |
 
-Set `VOICECHAT_DISABLED=1` in an agent's environment to silence it without uninstalling.
+Set `SOFTVOICE_DISABLED=1` in an agent's environment to silence it without uninstalling.
 
 ## How it fits together
 
 ```
-Claude Code / Codex ──Stop hook (stdin JSON)──▶ voicechat hook ──unix socket──▶ daemon
+Claude Code / Codex ──Stop hook (stdin JSON)──▶ softvoice hook ──unix socket──▶ daemon
                                                  (40 ms, no ML imports)         │ clean markdown
                                                                                  │ Pocket TTS stream
                                                                                  ▼ speakers
-you ──tap or hold the key──▶ voicechat app ──Parakeet──▶ paste into the focused prompt
+you ──tap or hold the key──▶ softvoice app ──Parakeet──▶ paste into the focused prompt
                        ▲ hands-free: the daemon's "speech_end" event opens the mic,
                          Silero VAD ends the take, the transcript is pasted (+ Enter)
 ```
@@ -267,7 +267,7 @@ Notification payloads, interruption on new prompts, the daemon's event stream, V
 timing on recorded speech, and a Pocket TTS to Parakeet round trip. Not yet: languages other than
 English, a signed app bundle, Windows or Linux (the listener needs Apple's MLX).
 
-Found a rough edge? Open an issue with the lines from `voicechat log` and `~/.voicechat/app.log`.
+Found a rough edge? Open an issue with the lines from `softvoice log` and `~/.softvoice/app.log`.
 
 ## Credits
 

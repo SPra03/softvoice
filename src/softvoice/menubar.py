@@ -1,4 +1,4 @@
-"""The macOS menu bar face of the listener: `voicechat app`.
+"""The macOS menu bar face of the listener: `softvoice app`.
 
 One quiet waveform in the menu bar, the same in every state (the pill is where state shows).
 Click it for Talk, Stop speaking, Mute and Hands-free. The engine is the same `Session` the
@@ -14,7 +14,7 @@ import sys
 import threading
 import traceback
 
-from voicechat.config import Config, write_default_config
+from softvoice.config import Config, write_default_config
 
 MENU_BAR_SYMBOL = "waveform"  # an SF Symbol, drawn as a template image so it matches the menu bar
 MENU_BAR_POINTS = 15.0
@@ -38,7 +38,7 @@ def menu_bar_image():
     """The status item's image: one monochrome symbol that follows the menu bar's appearance."""
     from AppKit import NSFontWeightMedium, NSImage, NSImageSymbolConfiguration
 
-    image = NSImage.imageWithSystemSymbolName_accessibilityDescription_(MENU_BAR_SYMBOL, "voicechat")
+    image = NSImage.imageWithSystemSymbolName_accessibilityDescription_(MENU_BAR_SYMBOL, "softvoice")
     if image is None:
         return None
     conf = NSImageSymbolConfiguration.configurationWithPointSize_weight_(MENU_BAR_POINTS, NSFontWeightMedium)
@@ -51,8 +51,8 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
     import rumps
     from PyObjCTools import AppHelper
 
-    from voicechat.ptt import Session
-    from voicechat.panel import Panel
+    from softvoice.ptt import Session
+    from softvoice.panel import Panel
 
     class MenuBarUI:
         supports_overlay = True
@@ -80,7 +80,7 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
 
     class App(rumps.App):
         def __init__(self):
-            super().__init__("voicechat", title=None, quit_button=None)
+            super().__init__("softvoice", title=None, quit_button=None)
             # rumps only takes icons from files; hand it the symbol image directly. It reads this
             # attribute when it creates the status item.
             self._icon_nsimage = menu_bar_image()
@@ -99,7 +99,7 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
                 self.status, None,
                 self.talk, self.stop_item, self.mute_item, self.hf_item, self.send_item, None,
                 self.pill_item, rumps.MenuItem("Open config file", callback=self.on_config), None,
-                rumps.MenuItem("Quit voicechat", callback=self.on_quit),
+                rumps.MenuItem("Quit softvoice", callback=self.on_quit),
             ]
             if not cfg.panel:
                 self.pill_item._menuitem.setHidden_(True)
@@ -139,7 +139,7 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
             if self.panel is not None:
                 self.panel.set_hidden(not self.panel.hidden)
 
-        def show_pill(self):  # a second `voicechat app` asked for it
+        def show_pill(self):  # a second `softvoice app` asked for it
             if self.panel is not None:
                 self.panel.set_hidden(False)
 
@@ -184,12 +184,12 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
             instance.release()
             rumps.quit_application()
 
-    from voicechat import instance
+    from softvoice import instance
 
     other = instance.claim()
     if other is not None:  # one copy is enough: show its pill and leave
         shown = other > 0 and instance.show(other)
-        print("voicechat app is already running" + (": showing its pill." if shown else "."), flush=True)
+        print("softvoice app is already running" + (": showing its pill." if shown else "."), flush=True)
         return 0
 
     app = App()
@@ -202,7 +202,7 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
     # so pastes were refused and the underline had no window to read. Give focus straight back.
     from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
 
-    from voicechat.front import front_pid, give_focus_to
+    from softvoice.front import front_pid, give_focus_to
 
     launched_from = front_pid()
     NSApplication.sharedApplication().setActivationPolicy_(NSApplicationActivationPolicyAccessory)
@@ -221,7 +221,7 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
         try:
             session.start()
         except Exception as exc:
-            print(f"voicechat app could not start: {exc}", file=sys.stderr, flush=True)
+            print(f"softvoice app could not start: {exc}", file=sys.stderr, flush=True)
             traceback.print_exc()
             AppHelper.callAfter(app.on_quit)
 
@@ -236,6 +236,6 @@ def run_app(cfg: Config, hotkey: str, auto_submit: bool, paste: bool, hands_free
     AppHelper.callAfter(hand_back)
     if not cfg.menu_bar_icon:
         AppHelper.callAfter(hide_menu_bar_item)
-    print("voicechat is running: floating panel (mic + speaker) and menu bar icon. Ctrl+C or Quit to stop.", flush=True)
+    print("softvoice is running: floating panel (mic + speaker) and menu bar icon. Ctrl+C or Quit to stop.", flush=True)
     app.run()
     return 0

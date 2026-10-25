@@ -1,4 +1,4 @@
-"""Register voicechat's hooks with Claude Code and Codex."""
+"""Register softvoice's hooks with Claude Code and Codex."""
 
 from __future__ import annotations
 
@@ -12,14 +12,14 @@ CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
 CODEX_DIR = Path.home() / ".codex"
 CODEX_HOOKS = CODEX_DIR / "hooks.json"
 EVENTS = ("Stop", "Notification", "UserPromptSubmit")
-MARK = "voicechat hook"
+MARK = "softvoice hook"
 
 
 def executable() -> str | None:
-    """The `voicechat` command to call back into: the one running now, else the one on PATH."""
-    exe = shutil.which("voicechat")
+    """The `softvoice` command to call back into: the one running now, else the one on PATH."""
+    exe = shutil.which("softvoice")
     argv0 = Path(sys.argv[0]).resolve() if sys.argv and sys.argv[0] else None
-    if argv0 and argv0.name == "voicechat" and argv0.exists():
+    if argv0 and argv0.name == "softvoice" and argv0.exists():
         exe = str(argv0)
     return exe
 
@@ -27,7 +27,7 @@ def executable() -> str | None:
 def hook_command() -> str:
     exe = executable()
     if not exe:
-        return f"{sys.executable} -m voicechat hook"
+        return f"{sys.executable} -m softvoice hook"
     return f"{exe} hook"
 
 
