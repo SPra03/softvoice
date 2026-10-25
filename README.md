@@ -9,6 +9,8 @@
 ![On-device](https://img.shields.io/badge/your%20voice%20%26%20text-never%20leave%20your%20Mac-blue)
 [![CI](https://github.com/SPra03/softvoice/actions/workflows/ci.yml/badge.svg)](https://github.com/SPra03/softvoice/actions/workflows/ci.yml)
 
+<p align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/pill-speaking.png" width="368" alt="The pill while a reply is read aloud: the words already spoken are white, the rest grey, and a coral stop button"></p>
+
 Your coding agent finishes a turn and reads its reply aloud, underlining each sentence on the
 page as it goes. You answer by talking: tap a key, say what you want, press Enter. A small glass
 pill floats above your windows and shows what is happening. No accounts, no API keys, no audio
@@ -20,49 +22,115 @@ sent anywhere: after a one-time model download it works with the network unplugg
 
 English first (the listener understands 24 other European languages; the voice has English, French, German, Spanish, Italian, Portuguese and Dutch). Apple Silicon Mac, macOS 14 or newer. MIT licence. Early, and in daily use by its author.
 
-## Install
+## Set up
 
-Three commands, with [uv](https://docs.astral.sh/uv/) doing the Python work:
+Five steps, about ten minutes, most of it the model download. [uv](https://docs.astral.sh/uv/)
+does the Python work.
+
+### 1. Install
 
 ```bash
 brew install uv
 uv tool install softvoice
-softvoice setup
 ```
 
 (Or the newest commit straight from GitHub: `uv tool install git+https://github.com/SPra03/softvoice`.)
 
-`setup` downloads the two models once (Pocket TTS, about 230 MB; Parakeet, 2.5 GB) and asks
-macOS for the permissions below. Then:
+### 2. Download the models and grant the permissions
 
 ```bash
-softvoice install          # hooks into Claude Code (and Codex, if ~/.codex exists)
-softvoice autostart on     # the pill, now and at every login, with no terminal left open
+softvoice setup
 ```
 
-`install` writes three hooks into `~/.claude/settings.json` (a backup is kept next to it) and,
-if `~/.codex` exists, into `~/.codex/hooks.json`. Restart your Claude Code sessions so they pick
-the hooks up; Codex needs a one-time `/hooks` to trust them. Upgrade later with
-`uv tool upgrade softvoice`; `softvoice uninstall` removes the hooks, `softvoice autostart off`
-the login item, and everything softvoice owns lives in `~/.softvoice`.
+This fetches the two models once (Pocket TTS, about 230 MB; Parakeet, 2.5 GB) and then makes
+macOS ask for the three permissions below in one go, so nothing interrupts you later. The output
+looks like this, with your own download times:
 
-Needs about 4 GB of disk for the models and the Python environment, and about 2 GB of memory
+```
+config: /Users/you/.softvoice/config.toml
+Pocket TTS (english, voice alba): about 230 MB the first time
+  ready in 40s
+Parakeet (mlx-community/parakeet-tdt-0.6b-v3): 2.5 GB the first time
+  ready in 190s
+Permissions (granted to the app this terminal belongs to):
+Microphone: opened
+Input Monitoring: granted (push-to-talk key)
+Accessibility: granted (pasting)
+Next: `softvoice install` adds the hooks, then `softvoice app --hands-free` starts the pill.
+```
+
+macOS grants permissions to the app that owns the terminal you ran `setup` from (Terminal, iTerm,
+the Claude desktop app, VS Code), not to softvoice itself. When a prompt appears, click **Open
+System Settings** and switch that app on. A line that says NOT granted has the same fix, and
+nothing needs a restart.
+
+| permission | needed for | where |
+| --- | --- | --- |
+| Microphone | listening | asked the first time the mic opens; Privacy & Security > Microphone |
+| Accessibility | pasting your words into the prompt; reading the page for the underline | Privacy & Security > Accessibility |
+| Input Monitoring | seeing the talk key and scroll events | Privacy & Security > Input Monitoring |
+
+<p align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/accessibility.png" width="480" alt="System Settings, Privacy and Security, Accessibility: the Claude desktop app and python3.12 switched on"></p>
+
+<p align="center"><sub>Accessibility on the author's Mac after setup: the Claude desktop app, which owns the terminal <code>setup</code> ran from, and <code>python3.12</code>, which the login item in step 4 runs under.</sub></p>
+
+### 3. Hook into Claude Code and Codex
+
+```bash
+softvoice install
+```
+
+This writes three hooks (`Stop`, `Notification`, `UserPromptSubmit`) into `~/.claude/settings.json`,
+keeping a backup next to it, and into `~/.codex/hooks.json` if `~/.codex` exists. Sessions that are
+already open keep their old settings: start a new Claude Code session, and in Codex run `/hooks`
+once to trust them.
+
+### 4. Start the pill
+
+```bash
+softvoice autostart on
+```
+
+The pill appears at the bottom right and comes back at every login, with no terminal left open.
+It runs under Python rather than your terminal, so macOS asks for the same permissions once
+more, this time for `python3.12`. Grant them and they stick.
+
+<p align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/pill-idle.png" width="84" alt="The pill at rest: a coral mic and a grey play button"></p>
+
+### 5. Try it
+
+Ask Claude Code anything. When it finishes the turn you hear the reply, and the pill shows the
+sentence being spoken. Then tap **right Option** (or click the mic), say what you want next, and
+press **Enter**: your words land in the prompt, ready to send.
+
+<p align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/pill-dictating.png" width="398" alt="A dictation session: the live transcript in the pill, with a cross to discard and a tick to paste"></p>
+
+Later, `uv tool upgrade softvoice` upgrades. Everything softvoice owns lives in `~/.softvoice`.
+It needs about 4 GB of disk for the models and the Python environment, and about 2 GB of memory
 while running. The models load once at start; idle, it uses no CPU.
 
-### Permissions
+### If something is off
 
-macOS grants these to the app that owns the terminal you run softvoice from (Terminal, iTerm,
-the Claude desktop app, VS Code), or to Python itself when the login item starts it. Each is
-asked for once.
+| symptom | what to check |
+| --- | --- |
+| nothing is spoken | `softvoice status` shows the daemon and `softvoice log` the hook calls. Hooks are read when a session starts, so only new Claude Code sessions speak. |
+| no pill | `softvoice autostart` shows the login item; **Show pill** in the menu bar brings back a hidden one; `~/.softvoice/app.log` says why it did not start. |
+| the talk key does nothing | Input Monitoring for the app that runs the pill: `python3.12` under the login item, your terminal's app otherwise. |
+| your words are not pasted | Accessibility for the same app. Meanwhile the text is on the clipboard, so ⌘V works. |
+| no underline on the page | the app has to start after Accessibility is granted (under the login item it restarts itself). Some apps expose no text; the app log says so. |
+| the mic hears nothing | Microphone for that app, under Privacy & Security > Microphone. |
 
-| permission | needed for | asked |
-| --- | --- | --- |
-| Microphone | listening | the first time the mic opens |
-| Accessibility | pasting your words into the prompt; reading the page for the underline | by `setup`, or the first paste |
-| Input Monitoring | seeing the talk key and scroll events | by `setup`, or the first `listen` or `app` |
+### Uninstall
 
-If you grant Accessibility after the app has started, it restarts itself (under the login item)
-so the underline can read the page.
+```bash
+softvoice uninstall         # removes the hooks
+softvoice autostart off     # removes the login item and stops the app
+uv tool uninstall softvoice
+rm -rf ~/.softvoice         # config and logs
+```
+
+The models stay in Hugging Face's cache: delete `~/.cache/huggingface/hub/models--kyutai--pocket-tts-without-voice-cloning`
+and `~/.cache/huggingface/hub/models--mlx-community--parakeet-tdt-0.6b-v3` to get the space back.
 
 ## Everyday use
 
@@ -176,6 +244,8 @@ The menu bar gets one small waveform, the same in every state (the pill is where
 `menu_bar_icon = false` hides it. Its first line says what softvoice is doing right now, and the
 menu has **Hide pill** / **Show pill**, **Talk**, **Stop speaking**, **Mute**, **Hands-free** and
 **Auto-send**, the config file, and Quit.
+
+<p align="center"><img src="https://raw.githubusercontent.com/SPra03/softvoice/main/docs/images/menu-bar.png" width="234" alt="The menu bar menu: a status line, Talk, Stop speaking, Mute, Hands-free, Auto-send, Hide pill, Open config file, Quit softvoice"></p>
 
 ### Running without a terminal
 
