@@ -45,6 +45,17 @@ Two things, both on device.
 - **Read anything.** Select text in any app and click the speaker. It reads the selection.
 - **Stop whenever you like.** Tap the talk key or click the speaker.
 
+## Features
+
+- **Offline.** Everything runs on your Mac, so it works offline.
+- **Private.** No audio or data ever leaves the machine.
+- **Lightweight.** Lighter than a handful of browser tabs (max 2.4 GB). The CPU sits at
+  0% until you talk: under 1% while you dictate; 27 seconds of speech transcribe in 0.6 s.
+- **Multilingual.** Understands 25 European languages, speaks 7.
+- **Auto reply.** Replies are read aloud the moment the agent finishes. Hands-free
+  mode then opens the mic for your next turn.
+- **Multi-voice.** 27 voices, or clone your own from a short WAV.
+
 ## Set up
 
 Five steps, about ten minutes, most of it the model download. [uv](https://docs.astral.sh/uv/)
