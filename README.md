@@ -13,16 +13,17 @@
 
 <p align="center"><sub>45 seconds, no cuts: a prompt dictated into Claude Code, sent with Enter, and the reply read aloud while the pill and a thin underline follow along.</sub></p>
 
-Your coding agent finishes a turn and reads its reply aloud, underlining each sentence on the
-page as it goes. You answer by talking: tap a key, say what you want, press Enter. A small glass
-pill floats above your windows and shows what is happening. No accounts, no API keys, no audio
-sent anywhere: after a one-time model download it works with the network unplugged.
+An open-source, offline tool to Converse with your coding agent. Tired of reading claude/codex
+outputs all day long, I made this tool to listen instead of reading my claude/codex outputs. Its
+just like having a conversation, without spending a dime. Drag the pill anywhere to place and use
+it across apps.
 
-- **Speaking**: [Pocket TTS](https://github.com/kyutai-labs/pocket-tts) by Kyutai, a 100M-parameter voice that runs on the CPU and starts talking about 200 ms after the text arrives
-- **Listening**: [Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) by NVIDIA, run through [parakeet-mlx](https://github.com/senstella/parakeet-mlx) on Apple Silicon; transcribes faster than you speak
-- **Integration**: the agents' own `Stop`, `Notification` and `UserPromptSubmit` hooks. No MCP server, no wrapping the terminal, no changes to how you work
+Under the hood: [Pocket TTS](https://github.com/kyutai-labs/pocket-tts) by Kyutai is the voice,
+[Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) by NVIDIA is the ear,
+and the agents' own hooks are the plumbing. No MCP server, no wrapped terminal, nothing about how
+you work changes.
 
-English first (the listener understands 24 other European languages; the voice has English, French, German, Spanish, Italian, Portuguese and Dutch). Apple Silicon Mac, macOS 14 or newer. MIT licence. Early, and in daily use by its author.
+Apple Silicon Mac, macOS 14 or newer. MIT licence. Early, and in daily use by its author.
 
 ## What it does
 
